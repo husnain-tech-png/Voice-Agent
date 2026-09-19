@@ -3,18 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Voice Agent — Speech & Chat Tester</title>
+  <title>AI Voice Agent — Stage 2: Ears & Mouth (STT & TTS)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-gradient: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #0f172a 60%, #020617 100%);
+      --bg-gradient: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #0f172a 55%, #020617 100%);
       --card-bg: rgba(30, 41, 59, 0.75);
-      --card-border: rgba(255, 255, 255, 0.08);
+      --card-border: rgba(255, 255, 255, 0.09);
       --primary: #38bdf8;
       --primary-hover: #0284c7;
-      --accent: #a855f7;
+      --accent: #c084fc;
+      --accent-glow: rgba(192, 132, 252, 0.35);
       --danger: #ef4444;
       --success: #10b981;
       --text-main: #f8fafc;
@@ -31,96 +32,137 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 24px 16px;
     }
 
     .container {
       background: var(--card-bg);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       border: 1px solid var(--card-border);
-      border-radius: 20px;
+      border-radius: 22px;
       padding: 28px;
       width: 100%;
-      max-width: 580px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 40px -10px rgba(56, 189, 248, 0.15);
+      max-width: 640px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65), 0 0 45px -10px rgba(56, 189, 248, 0.15);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Ambient top glow */
+    .container::before {
+      content: "";
+      position: absolute;
+      top: -100px;
+      left: 20%;
+      right: 20%;
+      height: 150px;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.25) 0%, transparent 70%);
+      pointer-events: none;
     }
 
     .header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
+      position: relative;
     }
 
     h1 {
-      font-size: 1.45rem;
+      font-size: 1.55rem;
       font-weight: 700;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      gap: 10px;
+      letter-spacing: -0.02em;
       background: linear-gradient(135deg, #38bdf8 0%, #c084fc 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
 
     p.subtitle {
       color: var(--text-muted);
       font-size: 0.88rem;
-      margin-bottom: 18px;
+      margin-bottom: 16px;
     }
 
     .badge-group {
       display: flex;
-      gap: 8px;
+      flex-wrap: wrap;
+      gap: 6px;
     }
 
     .badge {
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      padding: 4px 10px;
+      padding: 4px 9px;
       border-radius: 9999px;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 600;
+      letter-spacing: 0.02em;
+      transition: all 0.2s;
     }
-    .badge-green { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-    .badge-yellow { background: rgba(234, 179, 8, 0.2); color: #fde047; border: 1px solid rgba(234, 179, 8, 0.3); }
+    .badge-green { background: rgba(16, 185, 129, 0.18); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-yellow { background: rgba(234, 179, 8, 0.18); color: #fde047; border: 1px solid rgba(234, 179, 8, 0.3); }
     .badge-blue { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25); }
+    .badge-purple { background: rgba(192, 132, 252, 0.15); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.3); }
+    .badge-red { background: rgba(239, 68, 68, 0.18); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
 
-    .status-bar {
+    /* Pipeline Status Grid */
+    .pipeline-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+      padding: 10px;
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.75rem;
+    }
+    .pipeline-item {
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
       align-items: center;
-      margin-bottom: 16px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      font-size: 0.82rem;
+      text-align: center;
+      gap: 2px;
+    }
+    .pipeline-item span.label {
       color: var(--text-muted);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .pipeline-item span.val {
+      font-weight: 600;
+      color: #f1f5f9;
     }
 
+    /* Chat Display */
     .chat-box {
-      background: rgba(15, 23, 42, 0.6);
+      background: rgba(15, 23, 42, 0.65);
       border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 14px;
-      height: 290px;
+      height: 280px;
       overflow-y: auto;
       padding: 16px;
       display: flex;
       flex-direction: column;
       gap: 12px;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
       scroll-behavior: smooth;
     }
 
     .msg {
-      max-width: 82%;
+      max-width: 84%;
       padding: 11px 15px;
       border-radius: 14px;
       font-size: 0.92rem;
       line-height: 1.45;
       animation: fadeIn 0.2s ease-out;
+      position: relative;
     }
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(6px); }
@@ -132,14 +174,14 @@
       background: linear-gradient(135deg, #2563eb, #1d4ed8);
       color: #ffffff;
       border-bottom-right-radius: 3px;
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
     }
     .bot-msg {
       align-self: flex-start;
       background: rgba(51, 65, 85, 0.85);
       color: #f1f5f9;
       border-bottom-left-radius: 3px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.07);
     }
     .system-msg {
       align-self: center;
@@ -150,7 +192,23 @@
       border-radius: 9999px;
     }
 
-    /* Live Voice Indicator */
+    .bot-audio-replay {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 6px;
+      font-size: 0.75rem;
+      color: var(--primary);
+      cursor: pointer;
+      opacity: 0.85;
+      transition: opacity 0.2s;
+    }
+    .bot-audio-replay:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+
+    /* Live Recording Visualizer Banner */
     .recording-banner {
       display: none;
       align-items: center;
@@ -169,6 +227,20 @@
       50% { border-color: rgba(239, 68, 68, 0.8); }
     }
 
+    /* Live Speaking Visualizer Banner */
+    .speaking-banner {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(192, 132, 252, 0.12);
+      border: 1px solid rgba(192, 132, 252, 0.3);
+      color: #e9d5ff;
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      margin-bottom: 12px;
+    }
+
     .sound-waves {
       display: flex;
       gap: 3px;
@@ -185,12 +257,17 @@
     .sound-wave-bar:nth-child(2) { animation-delay: 0.2s; height: 70%; }
     .sound-wave-bar:nth-child(3) { animation-delay: 0.4s; height: 100%; }
     .sound-wave-bar:nth-child(4) { animation-delay: 0.1s; height: 50%; }
+
+    .speaking-waves .sound-wave-bar {
+      background: #c084fc;
+    }
+
     @keyframes wave {
-      0% { transform: scaleY(0.3); }
+      0% { transform: scaleY(0.25); }
       100% { transform: scaleY(1); }
     }
 
-    /* Input & Control Bar */
+    /* Input Controls */
     .input-row {
       display: flex;
       gap: 8px;
@@ -236,7 +313,6 @@
       transform: translateY(-1px);
     }
 
-    /* Voice / Mic Button */
     .btn-mic {
       background: rgba(56, 189, 248, 0.12);
       color: var(--primary);
@@ -248,6 +324,7 @@
       background: rgba(56, 189, 248, 0.22);
       border-color: var(--primary);
     }
+
     .btn-mic.recording {
       background: #ef4444;
       color: white;
@@ -260,17 +337,66 @@
       50% { transform: scale(1.05); }
     }
 
-    /* Voice Settings Toggles */
-    .voice-controls {
+    /* Voice Options Row */
+    .controls-panel {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .controls-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-top: 14px;
-      padding-top: 12px;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      flex-wrap: wrap;
+      gap: 10px;
       font-size: 0.8rem;
       color: var(--text-muted);
     }
+
+    .voice-select-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .voice-select {
+      background: rgba(15, 23, 42, 0.8);
+      color: #f8fafc;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 4px 8px;
+      border-radius: 8px;
+      font-size: 0.78rem;
+      outline: none;
+      cursor: pointer;
+    }
+    .btn-test-voice {
+      background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+      color: #fff;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    .btn-test-voice:hover {
+      filter: brightness(1.15);
+      transform: translateY(-1px);
+    }
+    .btn-test-voice:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
     .toggle-label {
       display: flex;
       align-items: center;
@@ -285,7 +411,7 @@
 
     .info-box {
       margin-top: 12px;
-      font-size: 0.76rem;
+      font-size: 0.75rem;
       color: #64748b;
       text-align: center;
       font-family: 'JetBrains Mono', monospace;
@@ -297,15 +423,27 @@
     <div class="header">
       <h1>🎙️ AI Voice Agent</h1>
       <div class="badge-group">
-        <span id="aiBadge" class="badge badge-yellow">Checking...</span>
-        <span class="badge badge-blue">Whisper STT</span>
+        <span id="aiBadge" class="badge badge-yellow">LLM Checking...</span>
+        <span id="sttBadge" class="badge badge-blue">Whisper STT</span>
+        <span id="ttsBadge" class="badge badge-purple">Mouth: Initializing</span>
       </div>
     </div>
-    <p class="subtitle">Stage 2 — Real-time Speech-to-Text & Conversational AI</p>
+    <p class="subtitle">Stage 2 — Ears (Whisper / Deepgram) & Mouth (ElevenLabs / Web Voice)</p>
 
-    <div class="status-bar">
-      <span>Status: <strong id="serverStatus" style="color:#38bdf8;">Connecting...</strong></span>
-      <span id="transcriptionBadge" style="font-size:0.75rem; color:#94a3b8;">STT: Groq Whisper Turbo</span>
+    <!-- Stage 2 Pipeline Diagnostics -->
+    <div class="pipeline-grid">
+      <div class="pipeline-item">
+        <span class="label">👂 Ears (STT)</span>
+        <span class="val" id="sttInfo">Whisper Turbo</span>
+      </div>
+      <div class="pipeline-item">
+        <span class="label">🧠 Brain (LLM)</span>
+        <span class="val" id="llmInfo">Groq GPT-120B</span>
+      </div>
+      <div class="pipeline-item">
+        <span class="label">👄 Mouth (TTS)</span>
+        <span class="val" id="ttsInfo">Checking...</span>
+      </div>
     </div>
 
     <!-- Active Recording Banner -->
@@ -322,10 +460,28 @@
       </div>
     </div>
 
+    <!-- Active Speaking Banner -->
+    <div class="speaking-banner" id="speakingBanner">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#c084fc;"></span>
+        <span><strong>Agent Speaking...</strong></span>
+      </div>
+      <div class="sound-waves speaking-waves">
+        <div class="sound-wave-bar"></div>
+        <div class="sound-wave-bar"></div>
+        <div class="sound-wave-bar"></div>
+        <div class="sound-wave-bar"></div>
+      </div>
+    </div>
+
     <!-- Chat Message Feed -->
     <div class="chat-box" id="chatBox">
       <div class="msg bot-msg">
-        👋 Hello! You can now <strong>type a message</strong> or <strong>click the microphone 🎙️</strong> to speak. Your speech will be converted to text instantly using Groq Whisper!
+        👋 Hello! Stage 2 is active. You can speak into your microphone or type below.
+        <br><br>
+        • <strong>Ears:</strong> Groq Whisper Turbo transcribes your voice in milliseconds.<br>
+        • <strong>Brain:</strong> Groq LLM understands your intent and generates smart replies.<br>
+        • <strong>Mouth:</strong> ElevenLabs / Browser TTS speaks the reply back to you!
       </div>
     </div>
 
@@ -338,20 +494,40 @@
       <button type="submit" class="btn btn-send" id="sendBtn">Send</button>
     </form>
 
-    <!-- Voice Configuration Toggles -->
-    <div class="voice-controls">
-      <label class="toggle-label">
-        <input type="checkbox" id="autoSendToggle" checked />
-        <span>Auto-send after speech</span>
-      </label>
-      <label class="toggle-label">
-        <input type="checkbox" id="ttsToggle" checked />
-        <span>🔊 Read aloud (Voice reply)</span>
-      </label>
+    <!-- Controls Panel -->
+    <div class="controls-panel">
+      <div class="controls-row">
+        <div class="voice-select-group">
+          <label for="voiceSelect">Voice:</label>
+          <select id="voiceSelect" class="voice-select">
+            <option value="EXAVITQu4vr4xnSDxMaL">Bella (ElevenLabs)</option>
+            <option value="pNInz6obpgDQGcFmaJgB">Adam (ElevenLabs)</option>
+            <option value="ErXwobaYiN019PkySvjV">Antoni (ElevenLabs)</option>
+            <option value="Xb7hH8MSUJpSbSDYk0k2">Alice (ElevenLabs)</option>
+            <option value="VR6AewLTigWG4xSOukaG">Arnold (ElevenLabs)</option>
+            <option value="JBFqnCBsd6RMkjVDRZzb">George (ElevenLabs)</option>
+            <option value="IKne3meq5aSn9XLyUdCD">Charlie (ElevenLabs)</option>
+            <option value="onwK4e9ZLuTAKqWW03F9">Daniel (ElevenLabs)</option>
+          </select>
+          <button type="button" class="btn-test-voice" id="testVoiceBtn" title="Test selected AI voice">
+            ▶ Test Voice
+          </button>
+        </div>
+
+        <label class="toggle-label">
+          <input type="checkbox" id="autoSendToggle" checked />
+          <span>Auto-send speech</span>
+        </label>
+
+        <label class="toggle-label">
+          <input type="checkbox" id="ttsToggle" checked />
+          <span>🔊 Voice Reply (TTS)</span>
+        </label>
+      </div>
     </div>
 
     <div class="info-box">
-      STT: <code>POST /transcribe</code> • LLM: <code>POST /chat</code>
+      STT: <code>POST /transcribe</code> • LLM: <code>POST /chat</code> • TTS: <code>POST /tts</code>
     </div>
   </div>
 
@@ -363,62 +539,230 @@
     const micBtn = document.getElementById('micBtn');
     const micIcon = document.getElementById('micIcon');
     const recordingBanner = document.getElementById('recordingBanner');
+    const speakingBanner = document.getElementById('speakingBanner');
     const recordTimer = document.getElementById('recordTimer');
     const autoSendToggle = document.getElementById('autoSendToggle');
     const ttsToggle = document.getElementById('ttsToggle');
-    const serverStatus = document.getElementById('serverStatus');
     const aiBadge = document.getElementById('aiBadge');
+    const sttBadge = document.getElementById('sttBadge');
+    const ttsBadge = document.getElementById('ttsBadge');
+    const sttInfo = document.getElementById('sttInfo');
+    const llmInfo = document.getElementById('llmInfo');
+    const ttsInfo = document.getElementById('ttsInfo');
+    const voiceSelect = document.getElementById('voiceSelect');
 
     let mediaRecorder = null;
     let audioChunks = [];
     let isRecording = false;
     let timerInterval = null;
     let recordStartTime = 0;
+    let currentAudioElement = null;
+    let elevenlabsAvailable = false;
 
-    // Check backend health
-    async function checkHealth() {
+    // Load backend status & voice list
+    async function initAgent() {
       try {
-        const res = await fetch('/api/health');
-        const data = await res.json();
-        serverStatus.textContent = 'Online (Port 3000)';
-        if (data.groqConfigured) {
+        const [healthRes, voicesRes] = await Promise.all([
+          fetch('/api/health').then(r => r.json()),
+          fetch('/api/voices').then(r => r.json())
+        ]);
+
+        // Health & Brain
+        if (healthRes.services?.llm?.configured) {
           aiBadge.className = 'badge badge-green';
           aiBadge.textContent = 'Groq LLM Active';
+          llmInfo.textContent = 'Groq (120B)';
         } else {
           aiBadge.className = 'badge badge-yellow';
           aiBadge.textContent = 'Simulation Mode';
+          llmInfo.textContent = 'Simulation';
         }
+
+        // Ears (STT)
+        sttInfo.textContent = healthRes.services?.stt?.deepgram ? 'Whisper / Deepgram' : 'Whisper Turbo';
+        sttBadge.textContent = 'Whisper STT';
+
+        // Mouth (TTS)
+        elevenlabsAvailable = Boolean(voicesRes.elevenlabsConfigured);
+        if (elevenlabsAvailable) {
+          ttsBadge.className = 'badge badge-purple';
+          ttsBadge.textContent = 'ElevenLabs TTS';
+          ttsInfo.textContent = 'ElevenLabs Cloud';
+        } else if (voicesRes.keyPresent) {
+          ttsBadge.className = 'badge badge-red';
+          ttsBadge.textContent = 'Invalid Key (Needs sk_...)';
+          ttsInfo.textContent = voicesRes.keyIssue || 'Key ID entered';
+        } else {
+          ttsBadge.className = 'badge badge-yellow';
+          ttsBadge.textContent = 'Browser TTS';
+          ttsInfo.textContent = 'Browser Fallback';
+        }
+
+        // Populate voices
+        if (voicesRes.voices && voicesRes.voices.length > 0) {
+          voiceSelect.innerHTML = '';
+          voicesRes.voices.forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v.id;
+            opt.textContent = `${v.name} (${v.provider})`;
+            if (v.id === voicesRes.defaultVoiceId) opt.selected = true;
+            voiceSelect.appendChild(opt);
+          });
+        }
+
       } catch (err) {
-        serverStatus.textContent = 'Offline';
-        serverStatus.style.color = '#ef4444';
-        aiBadge.textContent = 'Disconnected';
+        console.error("Init failed:", err);
+        aiBadge.className = 'badge badge-yellow';
+        aiBadge.textContent = 'Connecting...';
       }
     }
 
-    function appendMessage(text, isUser, isSystem = false) {
+    function appendMessage(text, isUser, isSystem = false, audioBlobUrl = null) {
       const msg = document.createElement('div');
       if (isSystem) {
         msg.className = 'msg system-msg';
+        msg.textContent = text;
       } else {
         msg.className = 'msg ' + (isUser ? 'user-msg' : 'bot-msg');
+        msg.innerHTML = `<div>${escapeHtml(text)}</div>`;
+
+        if (!isUser && audioBlobUrl) {
+          const replayBtn = document.createElement('div');
+          replayBtn.className = 'bot-audio-replay';
+          replayBtn.innerHTML = '🔊 Replay voice';
+          replayBtn.onclick = () => playAudio(audioBlobUrl);
+          msg.appendChild(replayBtn);
+        }
       }
-      msg.textContent = text;
       chatBox.appendChild(msg);
       chatBox.scrollTop = chatBox.scrollHeight;
       return msg;
     }
 
-    // Text-to-speech for bot replies
-    function speakText(text) {
-      if (!ttsToggle.checked || !window.speechSynthesis) return;
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    // Play synthesized voice audio
+    function playAudio(audioSrc) {
+      if (currentAudioElement) {
+        currentAudioElement.pause();
+        currentAudioElement = null;
+      }
+
+      speakingBanner.style.display = 'flex';
+      const audio = new Audio(audioSrc);
+      currentAudioElement = audio;
+
+      audio.onended = () => {
+        speakingBanner.style.display = 'none';
+        currentAudioElement = null;
+      };
+      audio.onerror = () => {
+        speakingBanner.style.display = 'none';
+        currentAudioElement = null;
+      };
+
+      audio.play().catch(e => {
+        console.warn("Audio play prevented:", e);
+        speakingBanner.style.display = 'none';
+      });
+    }
+
+    // Browser Speech Synthesis Fallback
+    function speakWithBrowser(text) {
+      if (!window.speechSynthesis) return;
       window.speechSynthesis.cancel();
+
+      speakingBanner.style.display = 'flex';
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1.05;
       utterance.pitch = 1.0;
+
+      utterance.onend = () => {
+        speakingBanner.style.display = 'none';
+      };
+      utterance.onerror = () => {
+        speakingBanner.style.display = 'none';
+      };
+
       window.speechSynthesis.speak(utterance);
     }
 
-    // Send user message to /chat
+    // High-Level TTS Handler: ElevenLabs first, fallback to browser
+    async function playVoiceResponse(text) {
+      if (!ttsToggle.checked) return null;
+
+      const selectedVoice = voiceSelect.value;
+      try {
+        const ttsRes = await fetch('/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, voiceId: selectedVoice })
+        });
+
+        const contentType = ttsRes.headers.get('content-type') || '';
+        if (contentType.includes('audio/mpeg')) {
+          const blob = await ttsRes.blob();
+          const audioUrl = URL.createObjectURL(blob);
+          playAudio(audioUrl);
+          return audioUrl;
+        } else {
+          const errData = await ttsRes.json().catch(() => ({}));
+          const errMsg = errData.details || errData.message || errData.error || 'Check API key configuration';
+          console.warn("TTS fallback reason:", errMsg);
+          appendMessage(`⚠️ ElevenLabs voice error: ${errMsg}. Using browser system voice instead.`, false, true);
+          speakWithBrowser(text);
+          return null;
+        }
+      } catch (err) {
+        console.warn("TTS fetch failed, using browser speech:", err);
+        appendMessage(`⚠️ TTS error: ${err.message}. Using browser system voice.`, false, true);
+        speakWithBrowser(text);
+        return null;
+      }
+    }
+
+    // Direct Voice Test Button Handler
+    const testVoiceBtn = document.getElementById('testVoiceBtn');
+    if (testVoiceBtn) {
+      testVoiceBtn.addEventListener('click', async () => {
+        const selectedVoice = voiceSelect.value;
+        const voiceName = voiceSelect.options[voiceSelect.selectedIndex]?.text || 'ElevenLabs';
+        testVoiceBtn.disabled = true;
+        testVoiceBtn.textContent = '⏳ Testing...';
+
+        appendMessage(`Testing AI voice for ${voiceName}...`, false, true);
+
+        try {
+          const sampleText = `Hello! This is a test of the ElevenLabs voice. If you can hear this natural AI voice, your API key is working perfectly!`;
+          const ttsRes = await fetch('/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: sampleText, voiceId: selectedVoice })
+          });
+
+          const contentType = ttsRes.headers.get('content-type') || '';
+          if (contentType.includes('audio/mpeg')) {
+            const blob = await ttsRes.blob();
+            const audioUrl = URL.createObjectURL(blob);
+            playAudio(audioUrl);
+            appendMessage(`✅ AI Voice synthesized successfully! Playing audio now.`, false, true);
+          } else {
+            const errData = await ttsRes.json().catch(() => ({}));
+            const errMsg = errData.details || errData.message || errData.error || 'Check server logs';
+            appendMessage(`❌ ElevenLabs TTS Failed: ${errMsg}`, false, true);
+          }
+        } catch (err) {
+          appendMessage(`❌ Request error: ${err.message}`, false, true);
+        } finally {
+          testVoiceBtn.disabled = false;
+          testVoiceBtn.textContent = '▶ Test Voice';
+        }
+      });
+    }
+
+    // Send text to backend /chat
     async function sendMessage(text) {
       const message = text.trim();
       if (!message) return;
@@ -435,8 +779,8 @@
         });
         const data = await res.json();
         if (data.reply) {
-          appendMessage(data.reply, false);
-          speakText(data.reply);
+          const audioUrl = await playVoiceResponse(data.reply);
+          appendMessage(data.reply, false, false, audioUrl);
         } else if (data.error) {
           appendMessage('⚠️ Error: ' + data.error, false);
         }
@@ -453,13 +797,12 @@
       sendMessage(userInput.value);
     });
 
-    // 🎙️ Voice Input Handler (MediaRecorder -> Groq Whisper)
+    // 🎙️ Speech-to-Text Microphone Recording
     async function startRecording() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         audioChunks = [];
         
-        // Pick best supported MIME type
         let mimeType = 'audio/webm';
         if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
           mimeType = 'audio/webm;codecs=opus';
@@ -484,7 +827,7 @@
         mediaRecorder.start(250);
         isRecording = true;
 
-        // UI State: Recording
+        // UI State
         micBtn.classList.add('recording');
         micIcon.textContent = '⏹️';
         recordingBanner.style.display = 'flex';
@@ -515,7 +858,7 @@
     }
 
     async function uploadAndTranscribe(audioBlob, mimeType) {
-      const statusMsg = appendMessage('⏳ Transcribing speech with Groq Whisper...', false, true);
+      const statusMsg = appendMessage('👂 Listening & transcribing with Groq Whisper...', false, true);
 
       try {
         const formData = new FormData();
@@ -555,7 +898,8 @@
       }
     });
 
-    checkHealth();
+    // Initialize agent on load
+    initAgent();
   </script>
 </body>
 </html>
