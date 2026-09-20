@@ -25,7 +25,8 @@ try {
 }
 
 Write-Host "`n2. Testing POST /tts (Mouth)..." -ForegroundColor Yellow
-$body = '{"text":"Hello! This is a test of Stage 2 speech-to-text and text-to-speech.","voiceId":"21m00Tcm4TlvDq8ikWAM"}'
+$defaultVoice = if ($voices.defaultVoiceId) { $voices.defaultVoiceId } else { "EXAVITQu4vr4xnSDxMaL" }
+$body = (@{ text = "Hello! This is a test of the speech mouth synthesis."; voiceId = $defaultVoice } | ConvertTo-Json)
 
 try {
     $response = Invoke-RestMethod -Uri "$baseUrl/tts" -Method Post -Body $body -ContentType "application/json" -UseBasicParsing

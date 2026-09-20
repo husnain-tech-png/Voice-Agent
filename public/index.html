@@ -3,21 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Voice Agent — Stage 2: Ears & Mouth (STT & TTS)</title>
+  <title>AI Voice Agent — Stage 3: Real-Time Streaming (WebSockets &lt;500ms)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg-gradient: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #0f172a 55%, #020617 100%);
-      --card-bg: rgba(30, 41, 59, 0.75);
-      --card-border: rgba(255, 255, 255, 0.09);
+      --card-bg: rgba(30, 41, 59, 0.78);
+      --card-border: rgba(255, 255, 255, 0.1);
       --primary: #38bdf8;
       --primary-hover: #0284c7;
       --accent: #c084fc;
       --accent-glow: rgba(192, 132, 252, 0.35);
       --danger: #ef4444;
       --success: #10b981;
+      --warning: #f59e0b;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
     }
@@ -32,24 +33,23 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 24px 16px;
+      padding: 20px 16px;
     }
 
     .container {
       background: var(--card-bg);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
       border: 1px solid var(--card-border);
       border-radius: 22px;
-      padding: 28px;
+      padding: 26px;
       width: 100%;
-      max-width: 640px;
+      max-width: 680px;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65), 0 0 45px -10px rgba(56, 189, 248, 0.15);
       position: relative;
       overflow: hidden;
     }
 
-    /* Ambient top glow */
     .container::before {
       content: "";
       position: absolute;
@@ -83,8 +83,8 @@
 
     p.subtitle {
       color: var(--text-muted);
-      font-size: 0.88rem;
-      margin-bottom: 16px;
+      font-size: 0.86rem;
+      margin-bottom: 14px;
     }
 
     .badge-group {
@@ -110,34 +110,77 @@
     .badge-purple { background: rgba(192, 132, 252, 0.15); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.3); }
     .badge-red { background: rgba(239, 68, 68, 0.18); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
 
-    /* Pipeline Status Grid */
-    .pipeline-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-      margin-bottom: 14px;
-      padding: 10px;
-      background: rgba(15, 23, 42, 0.5);
+    /* Mode Selector Bar */
+    .mode-selector {
+      display: flex;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 4px;
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+
+    .mode-btn {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .mode-btn.active {
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(192, 132, 252, 0.25));
+      color: #fff;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      box-shadow: 0 2px 10px rgba(56, 189, 248, 0.2);
+    }
+
+    /* Live Performance & Latency Telemetry Grid */
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      background: rgba(15, 23, 42, 0.55);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
       font-size: 0.75rem;
     }
-    .pipeline-item {
+    .telemetry-item {
       display: flex;
       flex-direction: column;
       align-items: center;
       text-align: center;
       gap: 2px;
     }
-    .pipeline-item span.label {
+    .telemetry-item span.label {
       color: var(--text-muted);
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
-    .pipeline-item span.val {
-      font-weight: 600;
+    .telemetry-item span.val {
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
       color: #f1f5f9;
+      font-size: 0.85rem;
+    }
+    .val-highlight {
+      color: #38bdf8 !important;
+    }
+    .val-target {
+      color: #34d399 !important;
     }
 
     /* Chat Display */
@@ -151,12 +194,12 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
       scroll-behavior: smooth;
     }
 
     .msg {
-      max-width: 84%;
+      max-width: 86%;
       padding: 11px 15px;
       border-radius: 14px;
       font-size: 0.92rem;
@@ -190,6 +233,39 @@
       background: rgba(255, 255, 255, 0.05);
       padding: 4px 12px;
       border-radius: 9999px;
+    }
+
+    /* Streaming Cursor Effect */
+    .streaming-cursor {
+      display: inline-block;
+      width: 7px;
+      height: 14px;
+      background: #38bdf8;
+      vertical-align: middle;
+      margin-left: 4px;
+      border-radius: 1px;
+      animation: blink 0.8s infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    .chunk-tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    .chunk-tag {
+      font-size: 0.68rem;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(56, 189, 248, 0.15);
+      color: #7dd3fc;
+      border: 1px solid rgba(56, 189, 248, 0.25);
     }
 
     .bot-audio-replay {
@@ -239,6 +315,26 @@
       border-radius: 10px;
       font-size: 0.85rem;
       margin-bottom: 12px;
+    }
+
+    .btn-interrupt {
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s;
+    }
+    .btn-interrupt:hover {
+      background: #ef4444;
+      color: #fff;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
     }
 
     .sound-waves {
@@ -337,7 +433,7 @@
       50% { transform: scale(1.05); }
     }
 
-    /* Voice Options Row */
+    /* Controls Panel */
     .controls-panel {
       margin-top: 14px;
       padding-top: 12px;
@@ -391,11 +487,6 @@
       filter: brightness(1.15);
       transform: translateY(-1px);
     }
-    .btn-test-voice:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
-    }
 
     .toggle-label {
       display: flex;
@@ -423,26 +514,41 @@
     <div class="header">
       <h1>🎙️ AI Voice Agent</h1>
       <div class="badge-group">
-        <span id="aiBadge" class="badge badge-yellow">LLM Checking...</span>
-        <span id="sttBadge" class="badge badge-blue">Whisper STT</span>
+        <span id="wsBadge" class="badge badge-yellow">WS Connecting...</span>
+        <span id="aiBadge" class="badge badge-green">Groq LLM Stream</span>
+        <span id="sttBadge" class="badge badge-blue">Whisper Turbo</span>
         <span id="ttsBadge" class="badge badge-purple">Mouth: Initializing</span>
       </div>
     </div>
-    <p class="subtitle">Stage 2 — Ears (Whisper / Deepgram) & Mouth (ElevenLabs / Web Voice)</p>
+    <p class="subtitle">Stage 3 — Real-Time Streaming (WebSockets) with Sub-500ms Delay &amp; Barge-In</p>
 
-    <!-- Stage 2 Pipeline Diagnostics -->
-    <div class="pipeline-grid">
-      <div class="pipeline-item">
+    <!-- Mode Selector: Stage 3 (Real-Time WebSocket) vs Stage 2 (Batch HTTP) -->
+    <div class="mode-selector">
+      <button class="mode-btn active" id="modeWsBtn">
+        ⚡ Live Stream (<span style="color:#38bdf8;">WebSocket &lt;500ms</span>)
+      </button>
+      <button class="mode-btn" id="modeHttpBtn">
+        📦 Batch Mode (HTTP Stage 2)
+      </button>
+    </div>
+
+    <!-- Live Performance & Latency Telemetry Grid -->
+    <div class="telemetry-grid">
+      <div class="telemetry-item">
+        <span class="label">⚡ TTFA Latency</span>
+        <span class="val val-target" id="metricTtfa">&lt;500ms Target</span>
+      </div>
+      <div class="telemetry-item">
         <span class="label">👂 Ears (STT)</span>
-        <span class="val" id="sttInfo">Whisper Turbo</span>
+        <span class="val" id="metricStt">~180ms</span>
       </div>
-      <div class="pipeline-item">
-        <span class="label">🧠 Brain (LLM)</span>
-        <span class="val" id="llmInfo">Groq GPT-120B</span>
+      <div class="telemetry-item">
+        <span class="label">🧠 Brain (TTFT)</span>
+        <span class="val" id="metricTtft">~80ms</span>
       </div>
-      <div class="pipeline-item">
-        <span class="label">👄 Mouth (TTS)</span>
-        <span class="val" id="ttsInfo">Checking...</span>
+      <div class="telemetry-item">
+        <span class="label">👄 Chunk #0 (TTS)</span>
+        <span class="val" id="metricTts">~150ms</span>
       </div>
     </div>
 
@@ -450,7 +556,7 @@
     <div class="recording-banner" id="recordingBanner">
       <div style="display: flex; align-items: center; gap: 8px;">
         <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#ef4444;"></span>
-        <span><strong>Listening...</strong> <span id="recordTimer">00:00</span></span>
+        <span><strong>Streaming Audio...</strong> <span id="recordTimer">00:00</span></span>
       </div>
       <div class="sound-waves">
         <div class="sound-wave-bar"></div>
@@ -460,11 +566,14 @@
       </div>
     </div>
 
-    <!-- Active Speaking Banner -->
+    <!-- Active Speaking Banner with Barge-In Button -->
     <div class="speaking-banner" id="speakingBanner">
       <div style="display: flex; align-items: center; gap: 8px;">
         <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#c084fc;"></span>
         <span><strong>Agent Speaking...</strong></span>
+        <button type="button" class="btn-interrupt" id="interruptBtn" title="Cut off the agent (Barge-in)">
+          ⚡ Interrupt (Barge-In)
+        </button>
       </div>
       <div class="sound-waves speaking-waves">
         <div class="sound-wave-bar"></div>
@@ -477,11 +586,12 @@
     <!-- Chat Message Feed -->
     <div class="chat-box" id="chatBox">
       <div class="msg bot-msg">
-        👋 Hello! Stage 2 is active. You can speak into your microphone or type below.
+        👋 Welcome to <strong>Stage 3: Real-Time Streaming</strong>!
         <br><br>
-        • <strong>Ears:</strong> Groq Whisper Turbo transcribes your voice in milliseconds.<br>
-        • <strong>Brain:</strong> Groq LLM understands your intent and generates smart replies.<br>
-        • <strong>Mouth:</strong> ElevenLabs / Browser TTS speaks the reply back to you!
+        • <strong>Full-Duplex WebSockets:</strong> Live bidirectional audio streaming on <code>/ws/voice</code>.<br>
+        • <strong>Sentence Pipelining:</strong> Groq LLM streams tokens, immediately dispatching each sentence to ElevenLabs Flash TTS.<br>
+        • <strong>Ultra-Low Latency:</strong> First audio starts playing in <strong>&lt;500 milliseconds</strong>!<br>
+        • <strong>Live Barge-In:</strong> Speak or click <em>Interrupt</em> to cut the agent off instantly at any time!
       </div>
     </div>
 
@@ -490,7 +600,7 @@
       <button type="button" class="btn btn-mic" id="micBtn" title="Click to speak (Microphone)">
         <span id="micIcon">🎙️</span>
       </button>
-      <input type="text" id="userInput" placeholder="Type or click the mic to speak..." autocomplete="off" required />
+      <input type="text" id="userInput" placeholder="Speak with mic or type for instant stream..." autocomplete="off" required />
       <button type="submit" class="btn btn-send" id="sendBtn">Send</button>
     </form>
 
@@ -526,12 +636,13 @@
       </div>
     </div>
 
-    <div class="info-box">
-      STT: <code>POST /transcribe</code> • LLM: <code>POST /chat</code> • TTS: <code>POST /tts</code>
+    <div class="info-box" id="pipelineProtocolInfo">
+      ⚡ WebSocket Stream: <code>ws://localhost:3000/ws/voice</code> • Sub-500ms Pipelined TTFA
     </div>
   </div>
 
   <script>
+    // Elements
     const chatBox = document.getElementById('chatBox');
     const chatForm = document.getElementById('chatForm');
     const userInput = document.getElementById('userInput');
@@ -541,82 +652,361 @@
     const recordingBanner = document.getElementById('recordingBanner');
     const speakingBanner = document.getElementById('speakingBanner');
     const recordTimer = document.getElementById('recordTimer');
+    const interruptBtn = document.getElementById('interruptBtn');
     const autoSendToggle = document.getElementById('autoSendToggle');
     const ttsToggle = document.getElementById('ttsToggle');
+    const voiceSelect = document.getElementById('voiceSelect');
+    const wsBadge = document.getElementById('wsBadge');
     const aiBadge = document.getElementById('aiBadge');
     const sttBadge = document.getElementById('sttBadge');
     const ttsBadge = document.getElementById('ttsBadge');
-    const sttInfo = document.getElementById('sttInfo');
-    const llmInfo = document.getElementById('llmInfo');
-    const ttsInfo = document.getElementById('ttsInfo');
-    const voiceSelect = document.getElementById('voiceSelect');
+    const modeWsBtn = document.getElementById('modeWsBtn');
+    const modeHttpBtn = document.getElementById('modeHttpBtn');
+    const testVoiceBtn = document.getElementById('testVoiceBtn');
+    const pipelineProtocolInfo = document.getElementById('pipelineProtocolInfo');
+
+    // Telemetry display elements
+    const metricTtfa = document.getElementById('metricTtfa');
+    const metricStt = document.getElementById('metricStt');
+    const metricTtft = document.getElementById('metricTtft');
+    const metricTts = document.getElementById('metricTts');
+
+    // State
+    let activeMode = 'websocket'; // 'websocket' | 'http'
+    let ws = null;
+    let wsConnected = false;
+    let reconnectTimeout = null;
 
     let mediaRecorder = null;
     let audioChunks = [];
     let isRecording = false;
     let timerInterval = null;
     let recordStartTime = 0;
-    let currentAudioElement = null;
+
+    // Web Audio Streaming Queue State
+    let audioCtx = null;
+    let audioQueue = [];
+    let isPlayingQueue = false;
+    let activeSourceNodes = [];
+    let currentStreamingMsg = null;
+    let currentStreamingContent = null;
+    let currentStreamingCursor = null;
+    let currentChunkTagsContainer = null;
     let elevenlabsAvailable = false;
 
-    // Load backend status & voice list
-    async function initAgent() {
+    // Initialize Web Audio Context
+    function getAudioContext() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContextClass();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    // Connect to WebSocket Server (/ws/voice)
+    function connectWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/voice`;
+
+      wsBadge.className = 'badge badge-yellow';
+      wsBadge.textContent = 'WS Connecting...';
+
       try {
-        const [healthRes, voicesRes] = await Promise.all([
-          fetch('/api/health').then(r => r.json()),
-          fetch('/api/voices').then(r => r.json())
-        ]);
+        ws = new WebSocket(wsUrl);
 
-        // Health & Brain
-        if (healthRes.services?.llm?.configured) {
-          aiBadge.className = 'badge badge-green';
-          aiBadge.textContent = 'Groq LLM Active';
-          llmInfo.textContent = 'Groq (120B)';
-        } else {
-          aiBadge.className = 'badge badge-yellow';
-          aiBadge.textContent = 'Simulation Mode';
-          llmInfo.textContent = 'Simulation';
-        }
-
-        // Ears (STT)
-        sttInfo.textContent = healthRes.services?.stt?.deepgram ? 'Whisper / Deepgram' : 'Whisper Turbo';
-        sttBadge.textContent = 'Whisper STT';
-
-        // Mouth (TTS)
-        elevenlabsAvailable = Boolean(voicesRes.elevenlabsConfigured);
-        if (elevenlabsAvailable) {
-          ttsBadge.className = 'badge badge-purple';
-          ttsBadge.textContent = 'ElevenLabs TTS';
-          ttsInfo.textContent = 'ElevenLabs Cloud';
-        } else if (voicesRes.keyPresent) {
-          ttsBadge.className = 'badge badge-red';
-          ttsBadge.textContent = 'Invalid Key (Needs sk_...)';
-          ttsInfo.textContent = voicesRes.keyIssue || 'Key ID entered';
-        } else {
-          ttsBadge.className = 'badge badge-yellow';
-          ttsBadge.textContent = 'Browser TTS';
-          ttsInfo.textContent = 'Browser Fallback';
-        }
-
-        // Populate voices
-        if (voicesRes.voices && voicesRes.voices.length > 0) {
-          voiceSelect.innerHTML = '';
-          voicesRes.voices.forEach(v => {
-            const opt = document.createElement('option');
-            opt.value = v.id;
-            opt.textContent = `${v.name} (${v.provider})`;
-            if (v.id === voicesRes.defaultVoiceId) opt.selected = true;
-            voiceSelect.appendChild(opt);
+        ws.onopen = () => {
+          wsConnected = true;
+          wsBadge.className = 'badge badge-green';
+          wsBadge.textContent = '🟢 WS Live (<500ms)';
+          console.log('[WS] Connected to live voice stream');
+          // Initialize session with selected voice
+          sendWsMessage({
+            type: 'session_init',
+            voiceId: voiceSelect.value
           });
-        }
+        };
 
+        ws.onmessage = async (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            handleWsEvent(data);
+          } catch (e) {
+            console.warn('[WS] Error handling message:', e);
+          }
+        };
+
+        ws.onclose = () => {
+          wsConnected = false;
+          wsBadge.className = 'badge badge-red';
+          wsBadge.textContent = '🔴 WS Offline';
+          console.log('[WS] Connection closed, scheduling reconnect...');
+          clearTimeout(reconnectTimeout);
+          reconnectTimeout = setTimeout(connectWebSocket, 2000);
+        };
+
+        ws.onerror = (err) => {
+          console.error('[WS ERROR]', err);
+          wsBadge.className = 'badge badge-red';
+          wsBadge.textContent = '🔴 WS Error';
+        };
       } catch (err) {
-        console.error("Init failed:", err);
-        aiBadge.className = 'badge badge-yellow';
-        aiBadge.textContent = 'Connecting...';
+        console.error('[WS INIT FAILED]', err);
       }
     }
 
+    function sendWsMessage(obj) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(obj));
+      }
+    }
+
+    // Handle incoming events from the WebSocket stream
+    function handleWsEvent(msg) {
+      switch (msg.type) {
+        case 'session_ready':
+          console.log('[WS READY] Session:', msg.sessionId);
+          break;
+
+        case 'transcription_final':
+          if (msg.text) {
+            userInput.value = '';
+            appendMessage(msg.text, true);
+            if (msg.latencyMs) {
+              metricStt.textContent = `${msg.latencyMs}ms`;
+            }
+          }
+          break;
+
+        case 'llm_start':
+          // Create the streaming bot message element with cursor
+          startStreamingBotMessage();
+          break;
+
+        case 'llm_first_token':
+          if (msg.latencyMs) {
+            metricTtft.textContent = `${msg.latencyMs}ms`;
+          }
+          break;
+
+        case 'llm_token':
+          appendStreamingToken(msg.token);
+          break;
+
+        case 'tts_audio_chunk':
+          if (msg.ttfaMs) {
+            metricTtfa.textContent = `⚡ ${msg.ttfaMs}ms`;
+            metricTtfa.className = msg.ttfaMs <= 500 ? 'val val-target' : 'val val-highlight';
+          }
+          if (msg.ttsLatencyMs) {
+            metricTts.textContent = `${msg.ttsLatencyMs}ms`;
+          }
+          addChunkTag(`Chunk #${msg.chunkIndex + 1} (${msg.ttsLatencyMs}ms)`);
+          
+          if (ttsToggle.checked && msg.audioBase64) {
+            enqueueAudioChunk(msg.audioBase64);
+          }
+          break;
+
+        case 'tts_fallback':
+          if (msg.ttfaMs) {
+            metricTtfa.textContent = `⚡ ${msg.ttfaMs}ms (Browser)`;
+          }
+          if (ttsToggle.checked && msg.text) {
+            speakWithBrowser(msg.text);
+          }
+          break;
+
+        case 'pipeline_complete':
+          finishStreamingBotMessage();
+          break;
+
+        case 'interrupted':
+          stopAgentSpeech(true);
+          appendMessage('⚡ Interrupted by user', false, true);
+          break;
+
+        case 'error':
+          finishStreamingBotMessage();
+          appendMessage('⚠️ Error: ' + (msg.error || msg.message), false, true);
+          break;
+      }
+    }
+
+    // UI: Start streaming bot response bubble
+    function startStreamingBotMessage() {
+      const msg = document.createElement('div');
+      msg.className = 'msg bot-msg';
+
+      const content = document.createElement('div');
+      content.style.display = 'inline';
+
+      const cursor = document.createElement('span');
+      cursor.className = 'streaming-cursor';
+
+      const chunkTags = document.createElement('div');
+      chunkTags.className = 'chunk-tag-list';
+
+      msg.appendChild(content);
+      msg.appendChild(cursor);
+      msg.appendChild(chunkTags);
+
+      chatBox.appendChild(msg);
+      chatBox.scrollTop = chatBox.scrollHeight;
+
+      currentStreamingMsg = msg;
+      currentStreamingContent = content;
+      currentStreamingCursor = cursor;
+      currentChunkTagsContainer = chunkTags;
+    }
+
+    function appendStreamingToken(token) {
+      if (currentStreamingContent) {
+        currentStreamingContent.textContent += token;
+        chatBox.scrollTop = chatBox.scrollHeight;
+      }
+    }
+
+    function addChunkTag(label) {
+      if (currentChunkTagsContainer) {
+        const tag = document.createElement('span');
+        tag.className = 'chunk-tag';
+        tag.textContent = label;
+        currentChunkTagsContainer.appendChild(tag);
+        chatBox.scrollTop = chatBox.scrollHeight;
+      }
+    }
+
+    function finishStreamingBotMessage() {
+      if (currentStreamingCursor) {
+        currentStreamingCursor.remove();
+        currentStreamingCursor = null;
+      }
+      currentStreamingMsg = null;
+      currentStreamingContent = null;
+      currentChunkTagsContainer = null;
+    }
+
+    // Web Audio API Chunk Streaming Queue
+    async function enqueueAudioChunk(base64Audio) {
+      try {
+        const ctx = getAudioContext();
+        const binary = atob(base64Audio);
+        const len = binary.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+
+        const audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
+        audioQueue.push(audioBuffer);
+
+        if (!isPlayingQueue) {
+          playNextInQueue();
+        }
+      } catch (err) {
+        console.warn('[AUDIO QUEUE ERROR]', err);
+      }
+    }
+
+    function playNextInQueue() {
+      if (audioQueue.length === 0) {
+        isPlayingQueue = false;
+        speakingBanner.style.display = 'none';
+        return;
+      }
+
+      isPlayingQueue = true;
+      speakingBanner.style.display = 'flex';
+
+      const ctx = getAudioContext();
+      const buffer = audioQueue.shift();
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+
+      activeSourceNodes.push(source);
+
+      source.onended = () => {
+        const idx = activeSourceNodes.indexOf(source);
+        if (idx !== -1) activeSourceNodes.splice(idx, 1);
+        playNextInQueue();
+      };
+
+      source.start(0);
+    }
+
+    // Stop and flush agent speech (Barge-in)
+    function stopAgentSpeech(silent = false) {
+      // 1. Stop active Web Audio source nodes
+      activeSourceNodes.forEach(node => {
+        try { node.stop(); } catch (e) {}
+      });
+      activeSourceNodes = [];
+      audioQueue = [];
+      isPlayingQueue = false;
+      speakingBanner.style.display = 'none';
+
+      // 2. Stop browser speech synthesis if active
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+
+      // 3. Send interrupt message to server if WebSocket is connected
+      if (!silent && activeMode === 'websocket') {
+        sendWsMessage({ type: 'interrupt' });
+      }
+    }
+
+    // Interrupt button click handler
+    interruptBtn.addEventListener('click', () => {
+      stopAgentSpeech(false);
+    });
+
+    // Browser Speech Synthesis Fallback
+    function speakWithBrowser(text) {
+      if (!window.speechSynthesis) return;
+      speakingBanner.style.display = 'flex';
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.05;
+      utterance.pitch = 1.0;
+      utterance.onend = () => { speakingBanner.style.display = 'none'; };
+      utterance.onerror = () => { speakingBanner.style.display = 'none'; };
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // Mode Switcher Listeners
+    modeWsBtn.addEventListener('click', () => {
+      activeMode = 'websocket';
+      modeWsBtn.classList.add('active');
+      modeHttpBtn.classList.remove('active');
+      pipelineProtocolInfo.innerHTML = '⚡ WebSocket Stream: <code>ws://localhost:3000/ws/voice</code> • Sub-500ms Pipelined TTFA';
+      metricTtfa.textContent = '<500ms Target';
+      appendMessage('Switched to Stage 3: Real-Time Streaming WebSocket mode (<500ms).', false, true);
+    });
+
+    modeHttpBtn.addEventListener('click', () => {
+      activeMode = 'http';
+      modeHttpBtn.classList.add('active');
+      modeWsBtn.classList.remove('active');
+      pipelineProtocolInfo.innerHTML = '📦 Batch HTTP Mode: <code>POST /voice-chat</code> (Stage 2)';
+      metricTtfa.textContent = 'Batch (1.5-2s)';
+      appendMessage('Switched to Stage 2: Standard HTTP Batch mode.', false, true);
+    });
+
+    // Voice Selector Change
+    voiceSelect.addEventListener('change', () => {
+      if (activeMode === 'websocket') {
+        sendWsMessage({
+          type: 'session_init',
+          voiceId: voiceSelect.value
+        });
+      }
+    });
+
+    // General message appending helper
     function appendMessage(text, isUser, isSystem = false, audioBlobUrl = null) {
       const msg = document.createElement('div');
       if (isSystem) {
@@ -630,7 +1020,10 @@
           const replayBtn = document.createElement('div');
           replayBtn.className = 'bot-audio-replay';
           replayBtn.innerHTML = '🔊 Replay voice';
-          replayBtn.onclick = () => playAudio(audioBlobUrl);
+          replayBtn.onclick = () => {
+            const audio = new Audio(audioBlobUrl);
+            audio.play();
+          };
           msg.appendChild(replayBtn);
         }
       }
@@ -643,152 +1036,68 @@
       return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
 
-    // Play synthesized voice audio
-    function playAudio(audioSrc) {
-      if (currentAudioElement) {
-        currentAudioElement.pause();
-        currentAudioElement = null;
-      }
-
-      speakingBanner.style.display = 'flex';
-      const audio = new Audio(audioSrc);
-      currentAudioElement = audio;
-
-      audio.onended = () => {
-        speakingBanner.style.display = 'none';
-        currentAudioElement = null;
-      };
-      audio.onerror = () => {
-        speakingBanner.style.display = 'none';
-        currentAudioElement = null;
-      };
-
-      audio.play().catch(e => {
-        console.warn("Audio play prevented:", e);
-        speakingBanner.style.display = 'none';
-      });
-    }
-
-    // Browser Speech Synthesis Fallback
-    function speakWithBrowser(text) {
-      if (!window.speechSynthesis) return;
-      window.speechSynthesis.cancel();
-
-      speakingBanner.style.display = 'flex';
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.05;
-      utterance.pitch = 1.0;
-
-      utterance.onend = () => {
-        speakingBanner.style.display = 'none';
-      };
-      utterance.onerror = () => {
-        speakingBanner.style.display = 'none';
-      };
-
-      window.speechSynthesis.speak(utterance);
-    }
-
-    // High-Level TTS Handler: ElevenLabs first, fallback to browser
-    async function playVoiceResponse(text) {
-      if (!ttsToggle.checked) return null;
-
-      const selectedVoice = voiceSelect.value;
-      try {
-        const ttsRes = await fetch('/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, voiceId: selectedVoice })
-        });
-
-        const contentType = ttsRes.headers.get('content-type') || '';
-        if (contentType.includes('audio/mpeg')) {
-          const blob = await ttsRes.blob();
-          const audioUrl = URL.createObjectURL(blob);
-          playAudio(audioUrl);
-          return audioUrl;
-        } else {
-          const errData = await ttsRes.json().catch(() => ({}));
-          const errMsg = errData.details || errData.message || errData.error || 'Check API key configuration';
-          console.warn("TTS fallback reason:", errMsg);
-          appendMessage(`⚠️ ElevenLabs voice error: ${errMsg}. Using browser system voice instead.`, false, true);
-          speakWithBrowser(text);
-          return null;
-        }
-      } catch (err) {
-        console.warn("TTS fetch failed, using browser speech:", err);
-        appendMessage(`⚠️ TTS error: ${err.message}. Using browser system voice.`, false, true);
-        speakWithBrowser(text);
-        return null;
-      }
-    }
-
-    // Direct Voice Test Button Handler
-    const testVoiceBtn = document.getElementById('testVoiceBtn');
-    if (testVoiceBtn) {
-      testVoiceBtn.addEventListener('click', async () => {
-        const selectedVoice = voiceSelect.value;
-        const voiceName = voiceSelect.options[voiceSelect.selectedIndex]?.text || 'ElevenLabs';
-        testVoiceBtn.disabled = true;
-        testVoiceBtn.textContent = '⏳ Testing...';
-
-        appendMessage(`Testing AI voice for ${voiceName}...`, false, true);
-
-        try {
-          const sampleText = `Hello! This is a test of the ElevenLabs voice. If you can hear this natural AI voice, your API key is working perfectly!`;
-          const ttsRes = await fetch('/tts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: sampleText, voiceId: selectedVoice })
-          });
-
-          const contentType = ttsRes.headers.get('content-type') || '';
-          if (contentType.includes('audio/mpeg')) {
-            const blob = await ttsRes.blob();
-            const audioUrl = URL.createObjectURL(blob);
-            playAudio(audioUrl);
-            appendMessage(`✅ AI Voice synthesized successfully! Playing audio now.`, false, true);
-          } else {
-            const errData = await ttsRes.json().catch(() => ({}));
-            const errMsg = errData.details || errData.message || errData.error || 'Check server logs';
-            appendMessage(`❌ ElevenLabs TTS Failed: ${errMsg}`, false, true);
-          }
-        } catch (err) {
-          appendMessage(`❌ Request error: ${err.message}`, false, true);
-        } finally {
-          testVoiceBtn.disabled = false;
-          testVoiceBtn.textContent = '▶ Test Voice';
-        }
-      });
-    }
-
-    // Send text to backend /chat
+    // Send Message (WebSocket or HTTP)
     async function sendMessage(text) {
       const message = text.trim();
       if (!message) return;
 
-      appendMessage(message, true);
-      userInput.value = '';
-      sendBtn.disabled = true;
+      // If agent is currently speaking, barge-in / interrupt first!
+      if (isPlayingQueue || (window.speechSynthesis && window.speechSynthesis.speaking)) {
+        stopAgentSpeech(false);
+      }
 
+      userInput.value = '';
+
+      if (activeMode === 'websocket' && wsConnected) {
+        // Stage 3 WebSocket text input
+        sendWsMessage({
+          type: 'text_input',
+          text: message
+        });
+      } else {
+        // Stage 2 HTTP Fallback
+        appendMessage(message, true);
+        sendBtn.disabled = true;
+        try {
+          const res = await fetch('/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message })
+          });
+          const data = await res.json();
+          if (data.reply) {
+            appendMessage(data.reply, false);
+            if (ttsToggle.checked) {
+              playHttpVoice(data.reply);
+            }
+          }
+        } catch (err) {
+          appendMessage('⚠️ Network Error: ' + err.message, false);
+        } finally {
+          sendBtn.disabled = false;
+        }
+      }
+    }
+
+    async function playHttpVoice(text) {
       try {
-        const res = await fetch('/chat', {
+        const ttsRes = await fetch('/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message })
+          body: JSON.stringify({ text, voiceId: voiceSelect.value })
         });
-        const data = await res.json();
-        if (data.reply) {
-          const audioUrl = await playVoiceResponse(data.reply);
-          appendMessage(data.reply, false, false, audioUrl);
-        } else if (data.error) {
-          appendMessage('⚠️ Error: ' + data.error, false);
+        if (ttsRes.headers.get('content-type')?.includes('audio/mpeg')) {
+          const blob = await ttsRes.blob();
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          speakingBanner.style.display = 'flex';
+          audio.onended = () => { speakingBanner.style.display = 'none'; };
+          audio.play();
+        } else {
+          speakWithBrowser(text);
         }
-      } catch (err) {
-        appendMessage('⚠️ Network Error: ' + err.message, false);
-      } finally {
-        sendBtn.disabled = false;
-        userInput.focus();
+      } catch (e) {
+        speakWithBrowser(text);
       }
     }
 
@@ -797,37 +1106,59 @@
       sendMessage(userInput.value);
     });
 
-    // 🎙️ Speech-to-Text Microphone Recording
+    // 🎙️ Speech Recording & Streaming
     async function startRecording() {
       try {
+        // If agent is speaking, cut it off immediately (Barge-in on speech!)
+        stopAgentSpeech(false);
+
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         audioChunks = [];
-        
+
         let mimeType = 'audio/webm';
         if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
           mimeType = 'audio/webm;codecs=opus';
-        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-          mimeType = 'audio/mp4';
         }
 
         mediaRecorder = new MediaRecorder(stream, { mimeType });
 
+        if (activeMode === 'websocket' && wsConnected) {
+          sendWsMessage({ type: 'audio_start' });
+        }
+
         mediaRecorder.ondataavailable = (e) => {
           if (e.data && e.data.size > 0) {
             audioChunks.push(e.data);
+            if (activeMode === 'websocket' && wsConnected) {
+              // Stream binary chunk over WebSocket
+              e.data.arrayBuffer().then(buf => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                  ws.send(buf);
+                }
+              });
+            }
           }
         };
 
         mediaRecorder.onstop = async () => {
           stream.getTracks().forEach(track => track.stop());
-          const audioBlob = new Blob(audioChunks, { type: mimeType });
-          await uploadAndTranscribe(audioBlob, mimeType);
+
+          if (activeMode === 'websocket' && wsConnected) {
+            // Send audio_end signal to trigger real-time STT and sentence pipelining
+            sendWsMessage({
+              type: 'audio_end',
+              mimeType: mimeType
+            });
+          } else {
+            // Stage 2 batch HTTP upload
+            const audioBlob = new Blob(audioChunks, { type: mimeType });
+            await uploadHttpAudio(audioBlob, mimeType);
+          }
         };
 
-        mediaRecorder.start(250);
+        mediaRecorder.start(200); // 200ms streaming chunk interval
         isRecording = true;
 
-        // UI State
         micBtn.classList.add('recording');
         micIcon.textContent = '⏹️';
         recordingBanner.style.display = 'flex';
@@ -857,36 +1188,20 @@
       recordingBanner.style.display = 'none';
     }
 
-    async function uploadAndTranscribe(audioBlob, mimeType) {
-      const statusMsg = appendMessage('👂 Listening & transcribing with Groq Whisper...', false, true);
-
+    async function uploadHttpAudio(audioBlob, mimeType) {
+      const statusMsg = appendMessage('👂 Transcribing audio (Stage 2 HTTP)...', false, true);
       try {
         const formData = new FormData();
-        const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
-        formData.append('audio', audioBlob, `voice-input.${extension}`);
-
-        const res = await fetch('/transcribe', {
-          method: 'POST',
-          body: formData
-        });
-
+        formData.append('audio', audioBlob, 'speech.webm');
+        const res = await fetch('/transcribe', { method: 'POST', body: formData });
         const data = await res.json();
         statusMsg.remove();
-
-        if (data.text && data.text.trim()) {
-          const transcribedText = data.text.trim();
-          userInput.value = transcribedText;
-
-          if (autoSendToggle.checked) {
-            sendMessage(transcribedText);
-          }
-        } else {
-          appendMessage('⚠️ No speech detected. Please speak closer to your mic and try again.', false, true);
+        if (data.text) {
+          sendMessage(data.text);
         }
-      } catch (err) {
+      } catch (e) {
         statusMsg.remove();
-        console.error('Transcription error:', err);
-        appendMessage('⚠️ STT Error: ' + err.message, false);
+        appendMessage('⚠️ STT Error: ' + e.message, false);
       }
     }
 
@@ -898,7 +1213,91 @@
       }
     });
 
-    // Initialize agent on load
+    // Test Voice Button Handler
+    testVoiceBtn.addEventListener('click', async () => {
+      const selectedVoice = voiceSelect.value;
+      const voiceName = voiceSelect.options[voiceSelect.selectedIndex]?.text || 'Selected Voice';
+      testVoiceBtn.disabled = true;
+      testVoiceBtn.textContent = '⏳ Testing...';
+
+      appendMessage(`Testing voice for ${voiceName}...`, false, true);
+
+      try {
+        const sampleText = `Hello! This is a low-latency voice test on Stage 3 WebSocket streaming.`;
+        const res = await fetch('/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: sampleText, voiceId: selectedVoice })
+        });
+
+        if (res.headers.get('content-type')?.includes('audio/mpeg')) {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          speakingBanner.style.display = 'flex';
+          audio.onended = () => { speakingBanner.style.display = 'none'; };
+          audio.play();
+          appendMessage('✅ Voice synthesized and playing!', false, true);
+        } else {
+          const data = await res.json().catch(() => ({}));
+          appendMessage(`❌ TTS Error: ${data.details || data.message || 'Check API key'}`, false, true);
+        }
+      } catch (err) {
+        appendMessage(`❌ Error: ${err.message}`, false, true);
+      } finally {
+        testVoiceBtn.disabled = false;
+        testVoiceBtn.textContent = '▶ Test Voice';
+      }
+    });
+
+    // Initial Health and Status Check
+    async function initAgent() {
+      try {
+        const [healthRes, voicesRes] = await Promise.all([
+          fetch('/api/health').then(r => r.json()),
+          fetch('/api/voices').then(r => r.json())
+        ]);
+
+        if (healthRes.services?.llm?.configured) {
+          aiBadge.className = 'badge badge-green';
+          aiBadge.textContent = 'Groq LLM Stream';
+        } else {
+          aiBadge.className = 'badge badge-yellow';
+          aiBadge.textContent = 'Simulation Mode';
+        }
+
+        sttBadge.textContent = 'Whisper Turbo';
+
+        elevenlabsAvailable = Boolean(voicesRes.elevenlabsConfigured);
+        if (elevenlabsAvailable) {
+          ttsBadge.className = 'badge badge-purple';
+          ttsBadge.textContent = 'ElevenLabs Flash';
+        } else if (voicesRes.keyPresent) {
+          ttsBadge.className = 'badge badge-red';
+          ttsBadge.textContent = 'Invalid Key (Needs sk_...)';
+        } else {
+          ttsBadge.className = 'badge badge-yellow';
+          ttsBadge.textContent = 'Browser TTS';
+        }
+
+        if (voicesRes.voices?.length > 0) {
+          voiceSelect.innerHTML = '';
+          voicesRes.voices.forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v.id;
+            opt.textContent = `${v.name} (${v.provider})`;
+            if (v.id === voicesRes.defaultVoiceId) opt.selected = true;
+            voiceSelect.appendChild(opt);
+          });
+        }
+      } catch (e) {
+        console.warn('Backend init check warning:', e);
+      }
+
+      // Connect WebSocket
+      connectWebSocket();
+    }
+
     initAgent();
   </script>
 </body>

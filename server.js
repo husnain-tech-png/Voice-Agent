@@ -1,8 +1,10 @@
 import express from "express";
+import http from "http";
 import cors from "cors";
 import dotenv from "dotenv";
 import Groq, { toFile } from "groq-sdk";
 import multer from "multer";
+import { WebSocketServer, WebSocket } from "ws";
 
 // Load variables from .env into process.env
 dotenv.config();
@@ -66,8 +68,8 @@ const PRESET_VOICES = [
   { id: "onwK4e9ZLuTAKqWW03F9", name: "Daniel", description: "Authoritative British male voice", provider: "ElevenLabs" }
 ];
 
-// Helper: Synthesize speech with ElevenLabs
-async function synthesizeElevenLabs(text, voiceId) {
+// Helper: Synthesize speech with ElevenLabs (with optional abort signal for barge-in)
+async function synthesizeElevenLabs(text, voiceId, signal = null) {
   const env = getEnv();
   const apiKey = env.ELEVENLABS_API_KEY;
   const targetVoice = voiceId || env.DEFAULT_ELEVENLABS_VOICE;
@@ -83,7 +85,7 @@ async function synthesizeElevenLabs(text, voiceId) {
     );
   }
 
-  let response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoice}?output_format=mp3_44100_128`, {
+  let response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoice}/stream?optimize_streaming_latency=3&output_format=mp3_44100_128`, {
     method: "POST",
     headers: {
       "xi-api-key": apiKey,
@@ -97,14 +99,15 @@ async function synthesizeElevenLabs(text, voiceId) {
         stability: 0.5,
         similarity_boost: 0.75
       }
-    })
+    }),
+    signal: signal
   });
 
   // If flash model is not active on this tier, fallback to eleven_multilingual_v2
   if (!response.ok) {
     const errorText = await response.text();
     if (response.status === 404 || (response.status === 400 && errorText.includes("model"))) {
-      response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoice}?output_format=mp3_44100_128`, {
+      response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoice}/stream?optimize_streaming_latency=3&output_format=mp3_44100_128`, {
         method: "POST",
         headers: {
           "xi-api-key": apiKey,
@@ -118,7 +121,8 @@ async function synthesizeElevenLabs(text, voiceId) {
             stability: 0.5,
             similarity_boost: 0.75
           }
-        })
+        }),
+        signal: signal
       });
     } else {
       throw new Error(`ElevenLabs API failed with status ${response.status}: ${errorText}`);
@@ -185,11 +189,20 @@ app.get("/api/health", (req, res) => {
   res.json({
     status: "online",
     message: "AI Voice Agent Backend is running smoothly!",
+    stage3: {
+      realTimeStreaming: true,
+      protocol: "WebSockets",
+      wsPath: "/ws/voice",
+      sentencePipelining: true,
+      bargeInSupported: true,
+      targetLatency: "<500ms"
+    },
     services: {
       llm: {
         provider: "Groq Cloud",
         configured: Boolean(groq),
-        model: env.GROQ_MODEL
+        model: env.GROQ_MODEL,
+        streaming: true
       },
       stt: {
         whisper: Boolean(groq),
@@ -198,10 +211,15 @@ app.get("/api/health", (req, res) => {
       },
       tts: {
         elevenlabs: isKeyFormatValid,
+        model: "eleven_flash_v2_5",
         fallback: "browser-speech-synthesis",
         defaultVoice: env.DEFAULT_ELEVENLABS_VOICE,
         keyPresent: Boolean(env.ELEVENLABS_API_KEY),
         keyValidFormat: isKeyFormatValid
+      },
+      websocket: {
+        path: "/ws/voice",
+        status: "active"
       }
     }
   });
@@ -480,10 +498,448 @@ app.post("/voice-chat", upload.single("audio"), async (req, res) => {
   }
 });
 
-// Start the server
-app.listen(PORT, () => {
+// ==============================================
+// 7. Stage 3: Real-Time Streaming WebSocket Server (/ws/voice)
+// ==============================================
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server, path: "/ws/voice" });
+
+// Safe JSON sender for WebSocket clients
+function safeSend(ws, messageObj) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(messageObj));
+  }
+}
+
+// Synthesize an audio chunk with ElevenLabs and stream to WS client
+async function synthesizeAndStreamChunk(
+  ws,
+  session,
+  sentence,
+  chunkIndex,
+  pipelineStartTime,
+  signal,
+  sttLatencyMs = 0,
+  isLast = false
+) {
+  if (signal && signal.aborted) return;
+  const env = getEnv();
+  const ttsStart = Date.now();
+
+  if (env.ELEVENLABS_API_KEY && env.ELEVENLABS_API_KEY.startsWith("sk_")) {
+    try {
+      console.log(`[WS TTS] Synthesizing Chunk #${chunkIndex}: "${sentence.substring(0, 30)}..."`);
+      const audioBuffer = await synthesizeElevenLabs(sentence, session.voiceId, signal);
+      if (signal && signal.aborted) return;
+
+      const ttsLatencyMs = Date.now() - ttsStart;
+      const ttfaMs = Date.now() - pipelineStartTime + sttLatencyMs;
+
+      console.log(`[WS TTS READY] Chunk #${chunkIndex} (${ttsLatencyMs}ms) | TTFA: ${ttfaMs}ms | ${(audioBuffer.length / 1024).toFixed(1)} KB`);
+
+      safeSend(ws, {
+        type: "tts_audio_chunk",
+        chunkIndex: chunkIndex,
+        text: sentence,
+        audioBase64: audioBuffer.toString("base64"),
+        mimeType: "audio/mpeg",
+        ttsLatencyMs: ttsLatencyMs,
+        ttfaMs: chunkIndex === 0 ? ttfaMs : null,
+        isLast: isLast
+      });
+      return;
+    } catch (err) {
+      if (signal && signal.aborted) return;
+      console.warn(`[WS TTS WARNING] Chunk #${chunkIndex} error: ${err.message}. Sending fallback.`);
+    }
+  }
+
+  // Fallback to browser Web Speech if ElevenLabs is not configured
+  const totalLatencyMs = Date.now() - pipelineStartTime + sttLatencyMs;
+  safeSend(ws, {
+    type: "tts_fallback",
+    chunkIndex: chunkIndex,
+    text: sentence,
+    reason: env.ELEVENLABS_API_KEY ? "ElevenLabs API synthesis error" : "ELEVENLABS_API_KEY not configured",
+    ttfaMs: chunkIndex === 0 ? totalLatencyMs : null,
+    isLast: isLast
+  });
+}
+
+// Handle end-to-end streaming conversational pipeline (Groq LLM Stream -> Sentence Pipeline -> TTS)
+async function handleStreamingPipeline(ws, session, userText, sttLatencyMs = 0) {
+  // Cancel previous running pipeline on this session if any
+  if (session.abortController) {
+    session.abortController.abort();
+  }
+  session.abortController = new AbortController();
+  const signal = session.abortController.signal;
+  session.isProcessing = true;
+
+  const pipelineStartTime = Date.now();
+  safeSend(ws, {
+    type: "llm_start",
+    input: userText,
+    timestamp: pipelineStartTime
+  });
+
+  const env = getEnv();
+
+  // If Groq key not configured, provide simulated low-latency stream
+  if (!groq) {
+    console.log(`[WS SIMULATION] Streaming simulated reply for: "${userText}"`);
+    const simulatedSentences = [
+      "Hello! I received your message via WebSocket.",
+      "The real-time streaming pipeline is active with sub-500 millisecond response time.",
+      "Add GROQ_API_KEY to your .env to chat with the live Groq 120B model."
+    ];
+
+    let sentenceIndex = 0;
+    let accumulated = "";
+
+    for (let i = 0; i < simulatedSentences.length; i++) {
+      if (signal.aborted) break;
+      const sentence = simulatedSentences[i];
+      const words = sentence.split(" ");
+
+      for (const word of words) {
+        if (signal.aborted) break;
+        accumulated += (accumulated ? " " : "") + word;
+        safeSend(ws, {
+          type: "llm_token",
+          token: word + " ",
+          accumulated: accumulated
+        });
+        await new Promise((r) => setTimeout(r, 45));
+      }
+
+      if (signal.aborted) break;
+      await synthesizeAndStreamChunk(
+        ws,
+        session,
+        sentence,
+        sentenceIndex++,
+        pipelineStartTime,
+        signal,
+        sttLatencyMs,
+        i === simulatedSentences.length - 1
+      );
+    }
+
+    if (!signal.aborted) {
+      safeSend(ws, {
+        type: "pipeline_complete",
+        totalTimeMs: Date.now() - pipelineStartTime,
+        fullReply: accumulated
+      });
+    }
+    session.isProcessing = false;
+    return;
+  }
+
+  // Real Groq LLM Token Streaming
+  try {
+    const stream = await groq.chat.completions.create(
+      {
+        model: env.GROQ_MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              session.systemPrompt ||
+              "You are a friendly, concise AI voice assistant. Respond naturally and keep answers short (1-2 sentences), since your response will be spoken aloud in real-time."
+          },
+          {
+            role: "user",
+            content: userText
+          }
+        ],
+        max_tokens: 150,
+        temperature: 0.7,
+        stream: true
+      },
+      { signal }
+    );
+
+    let fullReply = "";
+    let sentenceBuffer = "";
+    let sentenceIndex = 0;
+    let firstTokenTime = null;
+    const pendingTtsPromises = [];
+
+    for await (const chunk of stream) {
+      if (signal.aborted) {
+        console.log(`[WS STREAM] Stream aborted by user interruption.`);
+        break;
+      }
+
+      const token = chunk.choices[0]?.delta?.content || "";
+      if (!token) continue;
+
+      if (!firstTokenTime) {
+        firstTokenTime = Date.now();
+        const ttft = firstTokenTime - pipelineStartTime;
+        safeSend(ws, {
+          type: "llm_first_token",
+          latencyMs: ttft
+        });
+        console.log(`[WS LLM TTFT] First token received in ${ttft}ms`);
+      }
+
+      fullReply += token;
+      sentenceBuffer += token;
+
+      safeSend(ws, {
+        type: "llm_token",
+        token: token,
+        accumulated: fullReply
+      });
+
+      // Sentence Boundary Detection (Punctuation: '.', '!', '?', or '\n')
+      // Or clause boundary (',', ';', ':') if sentenceBuffer exceeds 30 characters
+      const boundaryMatch = sentenceBuffer.match(/^(.*?[.!?\n]+)\s*(.*)$/s)
+        || (sentenceBuffer.length >= 30 ? sentenceBuffer.match(/^(.*?[,;:])\s+(.*)$/s) : null);
+      if (boundaryMatch) {
+        const sentenceToSynthesize = boundaryMatch[1].trim();
+        sentenceBuffer = boundaryMatch[2]; // Remaining text for next chunk
+
+        if (sentenceToSynthesize) {
+          // Immediately dispatch sentence to ElevenLabs TTS stream
+          pendingTtsPromises.push(
+            synthesizeAndStreamChunk(
+              ws,
+              session,
+              sentenceToSynthesize,
+              sentenceIndex++,
+              pipelineStartTime,
+              signal,
+              sttLatencyMs,
+              false
+            )
+          );
+        }
+      }
+    }
+
+    // Flush any leftover sentence buffer when stream finishes
+    if (!signal.aborted && sentenceBuffer.trim()) {
+      pendingTtsPromises.push(
+        synthesizeAndStreamChunk(
+          ws,
+          session,
+          sentenceBuffer.trim(),
+          sentenceIndex++,
+          pipelineStartTime,
+          signal,
+          sttLatencyMs,
+          true
+        )
+      );
+    }
+
+    // Await all chunk syntheses before declaring pipeline complete
+    if (!signal.aborted) {
+      await Promise.allSettled(pendingTtsPromises);
+      const totalDuration = Date.now() - pipelineStartTime;
+      safeSend(ws, {
+        type: "pipeline_complete",
+        totalTimeMs: totalDuration,
+        fullReply: fullReply
+      });
+      console.log(`[WS PIPELINE COMPLETED] Total time: ${totalDuration}ms`);
+    }
+  } catch (error) {
+    if (signal.aborted || error.name === "AbortError") {
+      console.log(`[WS PIPELINE ABORTED] Pipeline aborted on signal.`);
+    } else {
+      console.error("[WS LLM ERROR]", error);
+      safeSend(ws, {
+        type: "error",
+        error: "LLM generation failed: " + error.message
+      });
+    }
+  } finally {
+    session.isProcessing = false;
+  }
+}
+
+// WebSocket Connection Lifecycle
+wss.on("connection", (ws, req) => {
+  const sessionId = "sess_" + Math.random().toString(36).substring(2, 9);
+  console.log(`[WS CONNECTED] Client connected (${sessionId}) from ${req.socket.remoteAddress}`);
+
+  const env = getEnv();
+  const session = {
+    id: sessionId,
+    voiceId: env.DEFAULT_ELEVENLABS_VOICE,
+    systemPrompt: "You are a friendly, concise AI voice assistant. Respond naturally and keep answers short (1-2 sentences), since your response will be spoken aloud to a caller in real-time.",
+    abortController: null,
+    isProcessing: false,
+    audioChunks: [],
+    audioStartTime: 0
+  };
+
+  // Notify client that connection is ready
+  safeSend(ws, {
+    type: "session_ready",
+    sessionId: session.id,
+    voiceId: session.voiceId,
+    defaultVoice: env.DEFAULT_ELEVENLABS_VOICE,
+    models: {
+      llm: env.GROQ_MODEL,
+      stt: "whisper-large-v3-turbo",
+      tts: "eleven_flash_v2_5"
+    }
+  });
+
+  ws.on("message", async (data, isBinary) => {
+    try {
+      // 1. Binary audio chunk
+      if (isBinary) {
+        session.audioChunks.push(Buffer.from(data));
+        return;
+      }
+
+      // 2. JSON control message
+      let msg;
+      try {
+        msg = JSON.parse(data.toString("utf8"));
+      } catch (parseErr) {
+        console.warn(`[WS NON-JSON] ${data.toString("utf8").substring(0, 50)}`);
+        return;
+      }
+
+      switch (msg.type) {
+        case "session_init": {
+          if (msg.voiceId) session.voiceId = msg.voiceId;
+          if (msg.systemPrompt) session.systemPrompt = msg.systemPrompt;
+          safeSend(ws, {
+            type: "session_updated",
+            voiceId: session.voiceId
+          });
+          break;
+        }
+
+        case "audio_start": {
+          session.audioChunks = [];
+          session.audioStartTime = Date.now();
+          safeSend(ws, { type: "audio_started" });
+          break;
+        }
+
+        case "audio_chunk": {
+          if (msg.data) {
+            session.audioChunks.push(Buffer.from(msg.data, "base64"));
+          }
+          break;
+        }
+
+        case "audio_end": {
+          if (session.audioChunks.length === 0) {
+            safeSend(ws, { type: "error", message: "No audio data received" });
+            return;
+          }
+
+          const audioBuffer = Buffer.concat(session.audioChunks);
+          session.audioChunks = [];
+          console.log(`[WS AUDIO RECEIVED] ${(audioBuffer.length / 1024).toFixed(1)} KB`);
+
+          const sttStart = Date.now();
+          safeSend(ws, { type: "stt_start" });
+
+          let userSpeechText = "";
+          try {
+            if (!groq) {
+              userSpeechText = "Hello! What is the weather like?";
+            } else {
+              userSpeechText = await transcribeWithWhisper(
+                audioBuffer,
+                msg.filename || "speech.webm",
+                msg.mimeType || "audio/webm"
+              );
+            }
+          } catch (sttErr) {
+            console.error("[WS STT ERROR]", sttErr.message);
+            safeSend(ws, { type: "error", error: "STT failed: " + sttErr.message });
+            return;
+          }
+
+          const sttLatencyMs = Date.now() - sttStart;
+          console.log(`[WS STT COMPLETED] (${sttLatencyMs}ms) "${userSpeechText}"`);
+
+          safeSend(ws, {
+            type: "transcription_final",
+            text: userSpeechText,
+            latencyMs: sttLatencyMs
+          });
+
+          if (!userSpeechText || !userSpeechText.trim()) {
+            safeSend(ws, {
+              type: "stt_empty",
+              message: "No speech recognized. Please try speaking again."
+            });
+            return;
+          }
+
+          // Kicks off streaming LLM + sentence-pipelined TTS
+          await handleStreamingPipeline(ws, session, userSpeechText, sttLatencyMs);
+          break;
+        }
+
+        case "text_input": {
+          const userText = (msg.text || "").trim();
+          if (!userText) return;
+          console.log(`[WS TEXT INPUT] "${userText}"`);
+          safeSend(ws, {
+            type: "transcription_final",
+            text: userText,
+            latencyMs: 0
+          });
+          await handleStreamingPipeline(ws, session, userText, 0);
+          break;
+        }
+
+        case "interrupt": {
+          // Instant Barge-In / Interruption
+          console.log(`[WS INTERRUPT] Interruption received from client ${session.id}`);
+          if (session.abortController) {
+            session.abortController.abort();
+          }
+          session.isProcessing = false;
+          safeSend(ws, {
+            type: "interrupted",
+            message: "Stream interrupted by user barge-in.",
+            timestamp: Date.now()
+          });
+          break;
+        }
+
+        default:
+          console.log(`[WS UNKNOWN TYPE]`, msg.type);
+      }
+    } catch (err) {
+      console.error("[WS MESSAGE ERROR]", err);
+      safeSend(ws, { type: "error", error: err.message });
+    }
+  });
+
+  ws.on("close", () => {
+    if (session.abortController) {
+      session.abortController.abort();
+    }
+    console.log(`[WS DISCONNECTED] Client ${session.id} disconnected`);
+  });
+
+  ws.on("error", (err) => {
+    console.error(`[WS CLIENT ERROR] ${session.id}:`, err.message);
+  });
+});
+
+// Start the server (HTTP + WebSocket on same port)
+server.listen(PORT, () => {
   console.log(`\n======================================================`);
   console.log(`🚀 AI Voice Agent Backend is live on http://localhost:${PORT}`);
+  console.log(`⚡ WebSocket Stream: ws://localhost:${PORT}/ws/voice (Stage 3)`);
   console.log(`📡 Health Check : GET  http://localhost:${PORT}/api/health`);
   console.log(`🎭 Voices List  : GET  http://localhost:${PORT}/api/voices`);
   console.log(`💬 Text Chat    : POST http://localhost:${PORT}/chat`);
@@ -492,8 +948,10 @@ app.listen(PORT, () => {
   console.log(`⚡ Voice Loop   : POST http://localhost:${PORT}/voice-chat`);
   const env = getEnv();
   console.log(`------------------------------------------------------`);
-  console.log(`🧠 Brain (LLM)  : ${groq ? "✅ Groq (" + env.GROQ_MODEL + ")" : "⚠️  Simulation Mode"}`);
+  console.log(`🧠 Brain (LLM)  : ${groq ? "✅ Groq (" + env.GROQ_MODEL + ") [Streaming Ready]" : "⚠️  Simulation Mode"}`);
   console.log(`👂 Ears (STT)   : ${groq ? "✅ Groq Whisper Turbo" : "⚠️  Simulation"}${env.DEEPGRAM_API_KEY ? " + Deepgram" : ""}`);
-  console.log(`👄 Mouth (TTS)  : ${env.ELEVENLABS_API_KEY ? (env.ELEVENLABS_API_KEY.startsWith("sk_") ? "✅ ElevenLabs Active" : "⚠️  Invalid Key (Key ID entered instead of sk_...)") : "ℹ️  Browser Speech Fallback"}`);
+  console.log(`👄 Mouth (TTS)  : ${env.ELEVENLABS_API_KEY ? (env.ELEVENLABS_API_KEY.startsWith("sk_") ? "✅ ElevenLabs Active (Flash v2.5 Pipelined)" : "⚠️  Invalid Key (Key ID entered instead of sk_...)") : "ℹ️  Browser Speech Fallback"}`);
+  console.log(`⚡ Latency Goal : <500ms Time-to-First-Audio (TTFA) + Live Barge-in`);
   console.log(`======================================================\n`);
 });
+
