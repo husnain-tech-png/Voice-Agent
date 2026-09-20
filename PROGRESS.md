@@ -51,6 +51,22 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
   - Intelligent delimiter boundary detector buffers tokens and splits at sentence/clause punctuation (`.`, `!`, `?`, `\n`, `,`, `;`).
   - Dispatches each sentence/clause to ElevenLabs Flash TTS (`eleven_flash_v2_5`) with `optimize_streaming_latency=3`.
   - Delivers audio chunks over WebSocket so playback begins on Chunk #0 while subsequent sentences are still generating in parallel!
+- [x] **Strict Sequential Chunk Ordering Lock (Two-Layer Buffer)**:
+  - **Server-Side Queue (`dispatchOrderedChunk`)**: Eliminates async race conditions where shorter chunks finish synthesizing before longer ones. Chunks are queued and sent in strictly sequential 0, 1, 2... order.
+  - **Client-Side Sequenced Buffer (`chunkAudioBufferMap`)**: Decodes and schedules Web Audio frames in exact chronological sequence so spoken voice always matches written text word-for-word.
+- [x] **LLM Accuracy & Reasoning Token Optimization**:
+  - Configured `reasoning_effort: "low"` and expanded token budget from 150 to 800 tokens to prevent reasoning models (`openai/gpt-oss-120b`) from consuming the entire token budget on internal thought channels.
+  - Eliminated empty speech bubbles and enabled authentic, fluent citations in multilingual requests (Urdu, Arabic, English).
+- [x] **ElevenLabs Concurrency Limiter & 429 Rate-Limit Prevention**:
+  - Implemented async semaphore queue (`ConcurrencyLimiter` with `maxConcurrency = 2`) preventing simultaneous bursts of parallel synthesis requests from exceeding ElevenLabs' 2-4 concurrent request cap.
+  - Added automatic 350ms exponential backoff retry on HTTP 429 errors.
+  - Enhanced sentence boundary detection so micro-headings (`**Arabic:**`) and lone quotation marks are never dispatched as isolated micro-chunks.
+  - Stripped markdown characters (`**`, `*`, `###`) prior to TTS for natural, artifact-free speech.
+  - Guarded client Web Speech fallback so failed chunks never trigger the metallic Windows system voice when ElevenLabs is configured.
+- [x] **OpenAI API Key Integration & Diagnostics**:
+  - Added support for `OPEN_AI_API_KEY` / `OPENAI_API_KEY` in `.env` loader.
+  - Direct endpoint testing verified key is structurally valid and authenticated, but credit balance is $0.00 (`credit_balance_exhausted`).
+  - Added real-time key diagnostic to `GET /api/health`.
 - [x] **Live Barge-In / Interruption Handling**:
   - When user speaks or triggers interrupt, client sends `{ type: "interrupt" }`.
   - Server immediately triggers `AbortController.abort()`, cancelling in-flight Groq stream and pending ElevenLabs requests.

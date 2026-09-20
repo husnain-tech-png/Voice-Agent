@@ -693,6 +693,8 @@
     let currentStreamingCursor = null;
     let currentChunkTagsContainer = null;
     let elevenlabsAvailable = false;
+    let nextExpectedChunk = 0;
+    let chunkAudioBufferMap = new Map();
 
     // Initialize Web Audio Context
     function getAudioContext() {
@@ -806,7 +808,7 @@
           addChunkTag(`Chunk #${msg.chunkIndex + 1} (${msg.ttsLatencyMs}ms)`);
           
           if (ttsToggle.checked && msg.audioBase64) {
-            enqueueAudioChunk(msg.audioBase64);
+            enqueueAudioChunk(msg.audioBase64, msg.chunkIndex);
           }
           break;
 
@@ -814,13 +816,19 @@
           if (msg.ttfaMs) {
             metricTtfa.textContent = `⚡ ${msg.ttfaMs}ms (Browser)`;
           }
-          if (ttsToggle.checked && msg.text) {
+          // Only trigger robotic browser voice if ElevenLabs is NOT configured/available
+          if (ttsToggle.checked && msg.text && !elevenlabsAvailable) {
             speakWithBrowser(msg.text);
           }
           break;
 
+        case 'tts_skip':
+        case 'tts_audio_error':
+          skipChunkIndex(msg.chunkIndex);
+          break;
+
         case 'pipeline_complete':
-          finishStreamingBotMessage();
+          finishStreamingBotMessage(msg.fullReply);
           break;
 
         case 'interrupted':
@@ -860,6 +868,8 @@
       currentStreamingContent = content;
       currentStreamingCursor = cursor;
       currentChunkTagsContainer = chunkTags;
+      nextExpectedChunk = 0;
+      chunkAudioBufferMap.clear();
     }
 
     function appendStreamingToken(token) {
@@ -879,7 +889,15 @@
       }
     }
 
-    function finishStreamingBotMessage() {
+    function finishStreamingBotMessage(fullReply = "") {
+      if (currentStreamingContent) {
+        if (!currentStreamingContent.textContent.trim() && fullReply) {
+          currentStreamingContent.textContent = fullReply;
+        } else if (!currentStreamingContent.textContent.trim()) {
+          // If completely empty, remove empty bubble so it doesn't clutter chat
+          if (currentStreamingMsg) currentStreamingMsg.remove();
+        }
+      }
       if (currentStreamingCursor) {
         currentStreamingCursor.remove();
         currentStreamingCursor = null;
@@ -889,8 +907,8 @@
       currentChunkTagsContainer = null;
     }
 
-    // Web Audio API Chunk Streaming Queue
-    async function enqueueAudioChunk(base64Audio) {
+    // Web Audio API Chunk Streaming Queue with Strict Sequential Ordering
+    async function enqueueAudioChunk(base64Audio, chunkIndex = 0) {
       try {
         const ctx = getAudioContext();
         const binary = atob(base64Audio);
@@ -901,13 +919,36 @@
         }
 
         const audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
-        audioQueue.push(audioBuffer);
+        chunkAudioBufferMap.set(chunkIndex, audioBuffer);
 
-        if (!isPlayingQueue) {
+        // Push chunks into audioQueue strictly in ascending order (0, 1, 2, 3...)
+        while (chunkAudioBufferMap.has(nextExpectedChunk)) {
+          const buf = chunkAudioBufferMap.get(nextExpectedChunk);
+          chunkAudioBufferMap.delete(nextExpectedChunk);
+          audioQueue.push(buf);
+          nextExpectedChunk++;
+        }
+
+        if (!isPlayingQueue && audioQueue.length > 0) {
           playNextInQueue();
         }
       } catch (err) {
         console.warn('[AUDIO QUEUE ERROR]', err);
+      }
+    }
+
+    function skipChunkIndex(chunkIndex) {
+      if (chunkIndex === nextExpectedChunk) {
+        nextExpectedChunk++;
+        while (chunkAudioBufferMap.has(nextExpectedChunk)) {
+          const buf = chunkAudioBufferMap.get(nextExpectedChunk);
+          chunkAudioBufferMap.delete(nextExpectedChunk);
+          audioQueue.push(buf);
+          nextExpectedChunk++;
+        }
+        if (!isPlayingQueue && audioQueue.length > 0) {
+          playNextInQueue();
+        }
       }
     }
 
@@ -946,6 +987,8 @@
       });
       activeSourceNodes = [];
       audioQueue = [];
+      chunkAudioBufferMap.clear();
+      nextExpectedChunk = 0;
       isPlayingQueue = false;
       speakingBanner.style.display = 'none';
 

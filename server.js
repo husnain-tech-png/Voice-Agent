@@ -22,6 +22,7 @@ function getEnv() {
   const groqModel = (process.env.GROQ_MODEL || "openai/gpt-oss-120b").trim();
   const defaultVoice = (process.env.ELEVENLABS_VOICE_ID || "EXAVITQu4vr4xnSDxMaL").trim(); // Bella (Free Tier & Pro)
   const deepgramKey = (process.env.DEEPGRAM_API_KEY || "").trim();
+  const openaiKey = (process.env.OPEN_AI_API_KEY || process.env.OPENAI_API_KEY || "").trim();
 
   // Sync Groq client whenever key is updated
   if (groqKey) {
@@ -37,7 +38,8 @@ function getEnv() {
     GROQ_MODEL: groqModel,
     ELEVENLABS_API_KEY: elevenlabsKey,
     DEFAULT_ELEVENLABS_VOICE: defaultVoice,
-    DEEPGRAM_API_KEY: deepgramKey
+    DEEPGRAM_API_KEY: deepgramKey,
+    OPENAI_API_KEY: openaiKey
   };
 }
 
@@ -68,8 +70,48 @@ const PRESET_VOICES = [
   { id: "onwK4e9ZLuTAKqWW03F9", name: "Daniel", description: "Authoritative British male voice", provider: "ElevenLabs" }
 ];
 
-// Helper: Synthesize speech with ElevenLabs (with optional abort signal for barge-in)
-async function synthesizeElevenLabs(text, voiceId, signal = null) {
+// Lightweight semaphore to limit concurrent requests to ElevenLabs API (prevents HTTP 429 concurrent_limit_exceeded)
+class ConcurrencyLimiter {
+  constructor(maxConcurrency = 2) {
+    this.maxConcurrency = maxConcurrency;
+    this.activeCount = 0;
+    this.queue = [];
+  }
+
+  async run(fn) {
+    if (this.activeCount >= this.maxConcurrency) {
+      await new Promise(resolve => this.queue.push(resolve));
+    }
+    this.activeCount++;
+    try {
+      return await fn();
+    } finally {
+      this.activeCount--;
+      if (this.queue.length > 0) {
+        const next = this.queue.shift();
+        next();
+      }
+    }
+  }
+}
+
+const elevenLabsLimiter = new ConcurrencyLimiter(2);
+
+// Strip markdown characters and noisy symbols before sending to TTS
+function cleanTextForSpeech(rawText) {
+  if (!rawText) return "";
+  return rawText
+    .replace(/\*\*(.*?)\*\*/g, "$1") // Bold **text** -> text
+    .replace(/\*(.*?)\*/g, "$1")     // Italic *text* -> text
+    .replace(/#{1,6}\s+/g, "")       // Headers ### -> empty
+    .replace(/[`_~]/g, "")           // `inline code`, _italic_, ~strike~
+    .replace(/^\s*[-*+]\s+/gm, "")   // Bullets
+    .replace(/\s+/g, " ")            // Normalize spaces
+    .trim();
+}
+
+// Helper: Synthesize speech with ElevenLabs (with concurrency limiter & 429 retry)
+async function synthesizeElevenLabs(text, voiceId, signal = null, retries = 2) {
   const env = getEnv();
   const apiKey = env.ELEVENLABS_API_KEY;
   const targetVoice = voiceId || env.DEFAULT_ELEVENLABS_VOICE;
@@ -85,58 +127,96 @@ async function synthesizeElevenLabs(text, voiceId, signal = null) {
     );
   }
 
-  let response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoice}/stream?optimize_streaming_latency=3&output_format=mp3_44100_128`, {
-    method: "POST",
-    headers: {
-      "xi-api-key": apiKey,
-      "Content-Type": "application/json",
-      "Accept": "audio/mpeg"
-    },
-    body: JSON.stringify({
-      text: text,
-      model_id: "eleven_flash_v2_5", // Ultra-fast low-latency voice model
-      voice_settings: {
-        stability: 0.5,
-        similarity_boost: 0.75
-      }
-    }),
-    signal: signal
-  });
+  const cleanText = cleanTextForSpeech(text);
+  // If text contains no letters, numbers, or Arabic/Urdu characters, skip synthesis
+  if (!cleanText || cleanText.length < 2 || !/[a-zA-Z0-9\u0600-\u06FF]/.test(cleanText)) {
+    return Buffer.alloc(0);
+  }
 
-  // If flash model is not active on this tier, fallback to eleven_multilingual_v2
-  if (!response.ok) {
-    const errorText = await response.text();
-    if (response.status === 404 || (response.status === 400 && errorText.includes("model"))) {
-      response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoice}/stream?optimize_streaming_latency=3&output_format=mp3_44100_128`, {
-        method: "POST",
-        headers: {
-          "xi-api-key": apiKey,
-          "Content-Type": "application/json",
-          "Accept": "audio/mpeg"
-        },
-        body: JSON.stringify({
-          text: text,
-          model_id: "eleven_multilingual_v2",
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (signal && signal.aborted) {
+      throw new Error("Aborted");
+    }
+
+    try {
+      return await elevenLabsLimiter.run(async () => {
+        if (signal && signal.aborted) throw new Error("Aborted");
+
+        let response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoice}/stream?optimize_streaming_latency=3&output_format=mp3_44100_128`, {
+          method: "POST",
+          headers: {
+            "xi-api-key": apiKey,
+            "Content-Type": "application/json",
+            "Accept": "audio/mpeg"
+          },
+          body: JSON.stringify({
+            text: cleanText,
+            model_id: "eleven_flash_v2_5", // Ultra-fast low-latency voice model
+            voice_settings: {
+              stability: 0.5,
+              similarity_boost: 0.75
+            }
+          }),
+          signal: signal
+        });
+
+        if (response.status === 429) {
+          const errBody = await response.text();
+          throw new Error(`ELEVENLABS_429: ${errBody}`);
+        }
+
+        // If flash model is not active on this tier, fallback to eleven_multilingual_v2
+        if (!response.ok) {
+          const errorText = await response.text();
+          if (response.status === 404 || (response.status === 400 && errorText.includes("model"))) {
+            response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoice}/stream?optimize_streaming_latency=3&output_format=mp3_44100_128`, {
+              method: "POST",
+              headers: {
+                "xi-api-key": apiKey,
+                "Content-Type": "application/json",
+                "Accept": "audio/mpeg"
+              },
+              body: JSON.stringify({
+                text: cleanText,
+                model_id: "eleven_multilingual_v2",
+                voice_settings: {
+                  stability: 0.5,
+                  similarity_boost: 0.75
+                }
+              }),
+              signal: signal
+            });
+
+            if (response.status === 429) {
+              const errBody2 = await response.text();
+              throw new Error(`ELEVENLABS_429: ${errBody2}`);
+            }
+          } else {
+            throw new Error(`ElevenLabs API failed with status ${response.status}: ${errorText}`);
           }
-        }),
-        signal: signal
+        }
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`ElevenLabs API failed with status ${response.status}: ${errorText}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        return Buffer.from(arrayBuffer);
       });
-    } else {
-      throw new Error(`ElevenLabs API failed with status ${response.status}: ${errorText}`);
+    } catch (err) {
+      if (signal && signal.aborted) throw err;
+      if (err.message && err.message.includes("ELEVENLABS_429") && attempt < retries) {
+        const delayMs = (attempt + 1) * 350;
+        console.warn(`[ELEVENLABS 429] Concurrency cap reached. Retrying chunk in ${delayMs}ms (attempt ${attempt + 1}/${retries})...`);
+        await new Promise(r => setTimeout(r, delayMs));
+        continue;
+      }
+      throw err;
     }
   }
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`ElevenLabs API failed with status ${response.status}: ${errorText}`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
 }
+
 
 // Helper: Transcribe audio with Deepgram
 async function transcribeWithDeepgram(audioBuffer, mimetype = "audio/wav") {
@@ -215,7 +295,17 @@ app.get("/api/health", (req, res) => {
         fallback: "browser-speech-synthesis",
         defaultVoice: env.DEFAULT_ELEVENLABS_VOICE,
         keyPresent: Boolean(env.ELEVENLABS_API_KEY),
-        keyValidFormat: isKeyFormatValid
+        keyValidFormat: isKeyFormatValid,
+        concurrencyLimit: 2
+      },
+      openai: {
+        configured: Boolean(env.OPENAI_API_KEY),
+        keyPresent: Boolean(env.OPENAI_API_KEY),
+        keyValidFormat: Boolean(env.OPENAI_API_KEY && env.OPENAI_API_KEY.startsWith("sk-")),
+        creditStatus: env.OPENAI_API_KEY ? "credit_balance_exhausted ($0.00)" : "not_configured",
+        message: env.OPENAI_API_KEY
+          ? "OpenAI key detected and authenticated, but credit balance is $0.00. Using Groq Cloud LLM for real-time streaming."
+          : "Not configured"
       },
       websocket: {
         path: "/ws/voice",
@@ -273,15 +363,16 @@ app.post("/chat", async (req, res) => {
         {
           role: "system",
           content:
-            "You are a friendly, concise AI voice assistant. Respond naturally and keep answers short (1-3 sentences), since your response will be spoken aloud to a caller over the phone."
+            "You are a knowledgeable, highly accurate AI voice assistant. Provide authentic, accurate information in the language requested by the user (such as Urdu or English). Keep answers natural, clear, and concise (2-3 sentences), so they can be spoken aloud smoothly."
         },
         {
           role: "user",
           content: message
         }
       ],
-      max_tokens: 150,
-      temperature: 0.7
+      max_tokens: 800,
+      temperature: 0.7,
+      ...(env.GROQ_MODEL.includes("gpt-oss") ? { reasoning_effort: "low" } : {})
     });
 
     const aiReply = completion.choices[0]?.message?.content || "Sorry, I couldn't generate a response.";
@@ -452,15 +543,16 @@ app.post("/voice-chat", upload.single("audio"), async (req, res) => {
         {
           role: "system",
           content:
-            "You are a friendly, concise AI voice assistant. Respond naturally and keep answers short (1-3 sentences), since your response will be spoken aloud to a caller over the phone."
+            "You are a knowledgeable, highly accurate AI voice assistant. Provide authentic, accurate information in the language requested by the user (such as Urdu or English). Keep answers natural, clear, and concise (2-3 sentences), so they can be spoken aloud smoothly."
         },
         {
           role: "user",
           content: userSpeechText
         }
       ],
-      max_tokens: 150,
-      temperature: 0.7
+      max_tokens: 800,
+      temperature: 0.7,
+      ...(env.GROQ_MODEL.includes("gpt-oss") ? { reasoning_effort: "low" } : {})
     });
 
     const aiReply = completion.choices[0]?.message?.content || "Sorry, I couldn't generate a response.";
@@ -511,6 +603,25 @@ function safeSend(ws, messageObj) {
   }
 }
 
+// Helper to guarantee audio chunks are sent to client in strict sequential order (0, 1, 2, ...)
+function dispatchOrderedChunk(ws, session, chunkIndex, payload) {
+  if (!session.pendingChunks) {
+    session.pendingChunks = new Map();
+  }
+  session.pendingChunks.set(chunkIndex, payload);
+
+  if (typeof session.nextChunkToSend !== "number") {
+    session.nextChunkToSend = 0;
+  }
+
+  while (session.pendingChunks.has(session.nextChunkToSend)) {
+    const nextPayload = session.pendingChunks.get(session.nextChunkToSend);
+    session.pendingChunks.delete(session.nextChunkToSend);
+    session.nextChunkToSend++;
+    safeSend(ws, nextPayload);
+  }
+}
+
 // Synthesize an audio chunk with ElevenLabs and stream to WS client
 async function synthesizeAndStreamChunk(
   ws,
@@ -535,9 +646,20 @@ async function synthesizeAndStreamChunk(
       const ttsLatencyMs = Date.now() - ttsStart;
       const ttfaMs = Date.now() - pipelineStartTime + sttLatencyMs;
 
+      // If audioBuffer is empty (e.g. text had no speakable words/letters), skip audio smoothly
+      if (!audioBuffer || audioBuffer.length === 0) {
+        dispatchOrderedChunk(ws, session, chunkIndex, {
+          type: "tts_skip",
+          chunkIndex: chunkIndex,
+          text: sentence,
+          isLast: isLast
+        });
+        return;
+      }
+
       console.log(`[WS TTS READY] Chunk #${chunkIndex} (${ttsLatencyMs}ms) | TTFA: ${ttfaMs}ms | ${(audioBuffer.length / 1024).toFixed(1)} KB`);
 
-      safeSend(ws, {
+      dispatchOrderedChunk(ws, session, chunkIndex, {
         type: "tts_audio_chunk",
         chunkIndex: chunkIndex,
         text: sentence,
@@ -550,17 +672,27 @@ async function synthesizeAndStreamChunk(
       return;
     } catch (err) {
       if (signal && signal.aborted) return;
-      console.warn(`[WS TTS WARNING] Chunk #${chunkIndex} error: ${err.message}. Sending fallback.`);
+      console.warn(`[WS TTS WARNING] Chunk #${chunkIndex} error: ${err.message}.`);
+      // NOTE: Do NOT send robotic tts_fallback when ElevenLabs is configured!
+      // Dispatch tts_audio_error so the sequence advances smoothly without playing robotic Windows voice.
+      dispatchOrderedChunk(ws, session, chunkIndex, {
+        type: "tts_audio_error",
+        chunkIndex: chunkIndex,
+        text: sentence,
+        error: err.message,
+        isLast: isLast
+      });
+      return;
     }
   }
 
-  // Fallback to browser Web Speech if ElevenLabs is not configured
+  // Fallback to browser Web Speech ONLY if ElevenLabs is NOT configured at all
   const totalLatencyMs = Date.now() - pipelineStartTime + sttLatencyMs;
-  safeSend(ws, {
+  dispatchOrderedChunk(ws, session, chunkIndex, {
     type: "tts_fallback",
     chunkIndex: chunkIndex,
     text: sentence,
-    reason: env.ELEVENLABS_API_KEY ? "ElevenLabs API synthesis error" : "ELEVENLABS_API_KEY not configured",
+    reason: "ELEVENLABS_API_KEY not configured",
     ttfaMs: chunkIndex === 0 ? totalLatencyMs : null,
     isLast: isLast
   });
@@ -575,6 +707,8 @@ async function handleStreamingPipeline(ws, session, userText, sttLatencyMs = 0) 
   session.abortController = new AbortController();
   const signal = session.abortController.signal;
   session.isProcessing = true;
+  session.nextChunkToSend = 0;
+  session.pendingChunks = new Map();
 
   const pipelineStartTime = Date.now();
   safeSend(ws, {
@@ -647,16 +781,17 @@ async function handleStreamingPipeline(ws, session, userText, sttLatencyMs = 0) 
             role: "system",
             content:
               session.systemPrompt ||
-              "You are a friendly, concise AI voice assistant. Respond naturally and keep answers short (1-2 sentences), since your response will be spoken aloud in real-time."
+              "You are a knowledgeable, highly accurate AI voice assistant. Provide authentic, accurate information in the language requested by the user (such as Urdu or English). Keep answers natural, clear, and concise (2-3 sentences), so they can be spoken aloud in real-time."
           },
           {
             role: "user",
             content: userText
           }
         ],
-        max_tokens: 150,
+        max_tokens: 800,
         temperature: 0.7,
-        stream: true
+        stream: true,
+        ...(env.GROQ_MODEL.includes("gpt-oss") ? { reasoning_effort: "low" } : {})
       },
       { signal }
     );
@@ -695,16 +830,37 @@ async function handleStreamingPipeline(ws, session, userText, sttLatencyMs = 0) 
         accumulated: fullReply
       });
 
-      // Sentence Boundary Detection (Punctuation: '.', '!', '?', or '\n')
-      // Or clause boundary (',', ';', ':') if sentenceBuffer exceeds 30 characters
-      const boundaryMatch = sentenceBuffer.match(/^(.*?[.!?\n]+)\s*(.*)$/s)
-        || (sentenceBuffer.length >= 30 ? sentenceBuffer.match(/^(.*?[,;:])\s+(.*)$/s) : null);
-      if (boundaryMatch) {
-        const sentenceToSynthesize = boundaryMatch[1].trim();
-        sentenceBuffer = boundaryMatch[2]; // Remaining text for next chunk
+      // Sentence Boundary Detection
+      // Split on terminal punctuation (. ! ? or Urdu ۔) followed by space/newline when buffer is >= 25 chars,
+      // or double newline \n\n when buffer is >= 20 chars,
+      // or single newline \n when buffer is >= 45 chars,
+      // or clause punctuation (, ; : ، ؛) when buffer is >= 65 chars.
+      let splitPos = -1;
+      let delimLen = 0;
 
-        if (sentenceToSynthesize) {
-          // Immediately dispatch sentence to ElevenLabs TTS stream
+      const termMatch = sentenceBuffer.match(/([.!?\u06D4])(\s+|$)/);
+      if (termMatch && termMatch.index + termMatch[1].length >= 25) {
+        splitPos = termMatch.index + termMatch[1].length;
+        delimLen = termMatch[2].length;
+      } else if (sentenceBuffer.includes("\n\n") && sentenceBuffer.indexOf("\n\n") >= 20) {
+        splitPos = sentenceBuffer.indexOf("\n\n");
+        delimLen = 2;
+      } else if (sentenceBuffer.length >= 45 && sentenceBuffer.includes("\n")) {
+        splitPos = sentenceBuffer.indexOf("\n");
+        delimLen = 1;
+      } else if (sentenceBuffer.length >= 65) {
+        const clauseMatch = sentenceBuffer.match(/([,;:،؛])\s+/);
+        if (clauseMatch && clauseMatch.index >= 30) {
+          splitPos = clauseMatch.index + clauseMatch[1].length;
+          delimLen = clauseMatch[0].length - clauseMatch[1].length;
+        }
+      }
+
+      if (splitPos !== -1) {
+        const sentenceToSynthesize = sentenceBuffer.substring(0, splitPos).trim();
+        sentenceBuffer = sentenceBuffer.substring(splitPos + delimLen);
+
+        if (sentenceToSynthesize && /[a-zA-Z0-9\u0600-\u06FF]/.test(sentenceToSynthesize)) {
           pendingTtsPromises.push(
             synthesizeAndStreamChunk(
               ws,
@@ -723,18 +879,21 @@ async function handleStreamingPipeline(ws, session, userText, sttLatencyMs = 0) 
 
     // Flush any leftover sentence buffer when stream finishes
     if (!signal.aborted && sentenceBuffer.trim()) {
-      pendingTtsPromises.push(
-        synthesizeAndStreamChunk(
-          ws,
-          session,
-          sentenceBuffer.trim(),
-          sentenceIndex++,
-          pipelineStartTime,
-          signal,
-          sttLatencyMs,
-          true
-        )
-      );
+      const leftover = sentenceBuffer.trim();
+      if (/[a-zA-Z0-9\u0600-\u06FF]/.test(leftover)) {
+        pendingTtsPromises.push(
+          synthesizeAndStreamChunk(
+            ws,
+            session,
+            leftover,
+            sentenceIndex++,
+            pipelineStartTime,
+            signal,
+            sttLatencyMs,
+            true
+          )
+        );
+      }
     }
 
     // Await all chunk syntheses before declaring pipeline complete
@@ -772,11 +931,13 @@ wss.on("connection", (ws, req) => {
   const session = {
     id: sessionId,
     voiceId: env.DEFAULT_ELEVENLABS_VOICE,
-    systemPrompt: "You are a friendly, concise AI voice assistant. Respond naturally and keep answers short (1-2 sentences), since your response will be spoken aloud to a caller in real-time.",
+    systemPrompt: "You are a knowledgeable, highly accurate AI voice assistant. Provide authentic, accurate information in the language requested by the user (such as Urdu or English). Keep answers natural, clear, and concise (2-3 sentences), so they can be spoken aloud in real-time.",
     abortController: null,
     isProcessing: false,
     audioChunks: [],
-    audioStartTime: 0
+    audioStartTime: 0,
+    nextChunkToSend: 0,
+    pendingChunks: new Map()
   };
 
   // Notify client that connection is ready
@@ -906,6 +1067,10 @@ wss.on("connection", (ws, req) => {
             session.abortController.abort();
           }
           session.isProcessing = false;
+          session.nextChunkToSend = 0;
+          if (session.pendingChunks) {
+            session.pendingChunks.clear();
+          }
           safeSend(ws, {
             type: "interrupted",
             message: "Stream interrupted by user barge-in.",
