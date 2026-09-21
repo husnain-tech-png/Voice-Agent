@@ -1816,9 +1816,9 @@
             twilioStatusBadge.textContent = '🟢 Configured';
           } else {
             phoneBadge.className = 'badge badge-purple';
-            phoneBadge.textContent = '📞 Twilio Ready';
+            phoneBadge.textContent = '📞 Phone: Simulator Mode';
             twilioStatusBadge.className = 'badge badge-purple';
-            twilioStatusBadge.textContent = 'ℹ️ Simulator Ready';
+            twilioStatusBadge.textContent = 'ℹ️ Simulator Ready (No Key Needed)';
           }
 
           if (twilioRes.webhooks?.incomingVoiceUrl) {
