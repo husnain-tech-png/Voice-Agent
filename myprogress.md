@@ -8,7 +8,7 @@ A voice agent needs three main superpowers:
 2. **Brain (LLM - Large Language Model):** Reads the words, understands what you mean, and thinks of a smart response.
 3. **Mouth (Text-to-Speech):** Speaks the answer aloud so you can hear it.
 
-🎉 **Stage 3 is now complete:** We have officially upgraded our agent from a slow "walkie-talkie" to a **Real-Time Streaming Phone Call with Sub-500ms Delay and Live Interruption (Barge-In)**!
+🎉 **Stage 4 is now complete:** We have officially connected our server to a **Real Telephone Line using Twilio Media Streams**! Anyone can dial our phone number from their cellphone, talk to the AI, hear Bella speak in authentic 8000Hz telephone voice, and interrupt her at any millisecond with live telephone barge-in!
 
 ---
 
@@ -223,44 +223,205 @@ You added `OPEN_AI_API_KEY` to your [`.env`](file:///c:/voice%20agenty/.env) fil
 
 ---
 
+## 📞 What We Built in Stage 4: Phone Line Connection (Twilio)
+
+In Stage 3, our voice agent could talk to us inside a web browser. But in Stage 4, we took the ultimate leap: **we gave our AI its own real telephone line so anyone in the world can call it from their cell phone!**
+
+---
+
+### 1. What is Twilio? (In Very Simple Words)
+* Think of **Twilio** as a giant, digital telephone company built entirely for programmers.
+* In the old days, if a company wanted phone lines, they had to hire telephone engineers to run physical copper cables into their building and set up an expensive PBX box.
+* With Twilio, you can buy a phone number (e.g. `+1-800-...` or any local number in the US, UK, Pakistan, or anywhere) with 1 click!
+* Whenever someone dials that number from their mobile phone, Twilio answers the cellular call, converts the caller's voice into digital internet data packets, and sends them straight to our computer!
+
+---
+
+### 2. The 4-Step Call Journey: How a Phone Call Works with Our AI
+1. **The Dial:** You pick up your mobile phone and call your Twilio number.
+2. **The Webhook (`POST /twilio/incoming`):** Twilio rings our server and says: *"Hey! Phone number +1234567890 is calling. What do you want me to do with this call?"*
+   - Our server replies with a special XML command called **TwiML**:
+     ```xml
+     <Response>
+       <Connect>
+         <Stream url="wss://your-domain.ngrok-free.app/twilio/media-stream" />
+       </Connect>
+     </Response>
+     ```
+   - This command tells Twilio: *"Don't play elevator music! Open a live, real-time WebSocket telephone line to our voice agent!"*
+3. **The Spoken Greeting:** The moment the line opens (`event: "start"`), our AI immediately says into the caller's ear:
+   > *"Hello! Thank you for calling. I am your AI assistant. How can I help you today?"*
+4. **The Conversation:**
+   - When you speak into your phone, Twilio streams your audio chunks to our server.
+   - Our **VAD (Voice Activity Detection)** listens to your voice and detects when you stop talking.
+   - Groq Whisper transcribes your words.
+   - Groq LLM streams the smart answer.
+   - ElevenLabs synthesizes Bella's voice in telephony audio format.
+   - Twilio plays the audio right into your mobile phone's earpiece in sub-second speed!
+
+---
+
+### 3. 🕵️‍♂️ Detective Story #5: The Secret Language of Telephones (μ-law vs MP3)
+*(A mind-blowing lesson on Audio Engineering & Telecommunication History!)*
+
+#### 🔍 The Mystery:
+When we first connected Twilio to ElevenLabs, the audio sent back sounded like ear-splitting static white noise — like an angry fax machine! 
+
+#### 🧩 The Root Cause (The 50-Year-Old Telephone Standard):
+1. **Modern Music vs Old Phones:**
+   - On the web and Spotify, we listen to **MP3 or WAV audio at 44,100 Hz (CD quality)** with 16-bit or 24-bit resolution. That's 44,100 sound samples every single second.
+   - But standard telephone networks worldwide (landlines and mobile cellular circuits) were designed in the **1970s**!
+   - To save bandwidth across underground cables, telephone companies invented **G.711 μ-law (pronounced 'Mu-law')**:
+     - It only captures **8,000 samples per second** (8kHz mono).
+     - It compresses sound into small 8-bit non-linear logarithmic chunks.
+2. **The Mismatch:**
+   - Twilio expects **raw 8,000Hz μ-law bytes**.
+   - If you send Twilio a normal 44,100Hz MP3 file, Twilio's audio decoder tries to play MP3 header bytes as if they were μ-law sound waves — creating screeching static!
+
+#### 🛠️ How We Fixed It:
+1. **Precomputed μ-law Lookup Table in [`server.js`](file:///c:/voice%20agenty/server.js):**
+   - We precomputed a lightning-fast 256-entry lookup table (`MU_LAW_DECODE_TABLE`).
+   - Every 8-bit phone audio sample received from Twilio is decoded into high-fidelity 16-bit linear PCM in **0.0001 milliseconds** without needing slow audio conversion tools like ffmpeg!
+2. **Direct Telephony Output from ElevenLabs (`output_format=ulaw_8000`):**
+   - ElevenLabs has a special hidden superpower: it can synthesize speech directly in native telephone format: `output_format=ulaw_8000`.
+   - When Bella speaks for the phone, ElevenLabs creates raw 8kHz μ-law bytes directly, which we stream straight down the phone line with **zero transcoding lag**!
+
+**Result:** Crystal-clear, warm, authentic telephone audio delivered straight into the caller's phone earpiece!
+
+---
+
+### 4. 🕵️‍♂️ Detective Story #6: The Mystery of the Invisible Button (VAD & Silence Threshold)
+*(How does a computer know when you are done talking on a phone call?)*
+
+#### 🔍 The Problem:
+In our browser studio (Stage 3), there was a **🎙️ Mic button** that you clicked to start speaking and clicked again when you were done.
+**On a real telephone call, there are no buttons!** You just talk naturally, pause, and expect the person on the other end to reply. If the AI replies while you are taking a breath mid-sentence, it's rude. If it waits 4 seconds after you finish, the call feels dead!
+
+#### 🧩 The Solution (Energy-Based Voice Activity Detection):
+1. Twilio sends audio in small packets of **160 bytes every 20 milliseconds**.
+2. For every 20ms packet, our code calculates the **RMS Energy (Root Mean Square)** using our μ-law decode table:
+   - Line static / background room silence: RMS is typically **100 to 400**.
+   - Human vocal cords speaking: RMS jumps up to **1,000 to 5,000+**!
+3. **The Logic:**
+   - When RMS exceeds `600`, the server marks: `isSpeaking = true` and resets the silence counter.
+   - When RMS drops below `600`, the server starts counting silence chunks.
+   - **The Golden Silence Window:** Once **35 consecutive silence chunks (~700 milliseconds)** have passed, the server knows: *The caller has paused and finished their thought!*
+   - The server instantly wraps the collected speech into a standard WAV audio header, runs Whisper Turbo STT, streams the answer from Groq LLM, and speaks the reply!
+
+---
+
+### 5. ⚡ Live Telephone Barge-In: Interrupting the AI on a Cellphone
+* What happens if Bella is talking on the phone and you say: *"Wait, can you repeat that?"*
+* **The Twilio `clear` event magic:**
+  1. The caller speaks.
+  2. Our VAD detects energy > 600 while `isAiSpeaking` is true.
+  3. Our server immediately sends a special JSON packet to Twilio:
+     ```json
+     { "event": "clear", "streamSid": "..." }
+     ```
+  4. Twilio instantly flushes its internal sound buffer, immediately muting the audio in the caller's earpiece in **under 50 milliseconds**!
+  5. The server kills the running LLM stream and starts listening to what the caller is saying.
+  - **Result:** You can interrupt the AI on your phone just like a real human!
+
+---
+
+### 6. 📱 How to Connect Your Real Phone Number (In Very Simple Words)
+
+Follow these 4 simple steps to have the AI answer your cellphone:
+
+#### Step 1: Make your computer reachable from the internet (Tunnel)
+Twilio's servers in California cannot reach `http://localhost:3000` on your home computer directly because your home Wi-Fi router blocks incoming connections.
+To solve this, open a new PowerShell terminal and run:
+```powershell
+ngrok http 3000
+```
+*(If you don't have ngrok installed, run: `npx localtunnel --port 3000`)*
+
+It will give you a public web address that looks like this:
+`https://a1b2-c3d4.ngrok-free.app`
+
+#### Step 2: Save the URL in your `.env` file
+Open [`.env`](file:///c:/voice%20agenty/.env) and set:
+```env
+PUBLIC_URL=https://a1b2-c3d4.ngrok-free.app
+```
+
+#### Step 3: Paste the Webhook into Twilio Console
+1. Go to [https://console.twilio.com](https://console.twilio.com).
+2. Click on **Phone Numbers** ➡️ **Manage** ➡️ **Active Numbers**.
+3. Click on your phone number.
+4. Scroll down to the **Voice Configuration** section:
+   - Under **"A CALL COMES IN"**, choose **Webhook**.
+   - Make sure the dropdown is set to **HTTP POST**.
+   - In the URL box, paste:
+     ```
+     https://a1b2-c3d4.ngrok-free.app/twilio/incoming
+     ```
+   - Click the blue **Save Configuration** button at the bottom!
+
+#### Step 4: Call your number!
+Pick up your cell phone, dial your Twilio number, and listen as your AI assistant answers:
+> *"Hello! Thank you for calling. I am your AI assistant. How can I help you today?"*
+
+---
+
+### 7. 🧪 Testing Without a Phone Number (The Free Built-In Simulator)
+You don't even need to buy a Twilio phone number today to test this!
+1. Open **[http://localhost:3000](http://localhost:3000)** in your browser.
+2. Click the **📞 Phone Line (Twilio Stage 4)** button in the top mode selector.
+3. Click **📞 Start Test Call** in the simulator card:
+   - It will connect to the Twilio Media Stream WebSocket.
+   - It simulates a phone call in real-time.
+   - **You will actually hear Bella speak the phone greeting and reply in 8000Hz μ-law audio right through your computer speakers!**
+4. Or run the automated terminal test suite:
+   ```powershell
+   .\test-stage4-phone.ps1
+   ```
+
+---
+
 ## 📚 Key Concepts Dictionary (Beginner Friendly)
 
 | Term | What It Means in Simple Words |
 | :--- | :--- |
-| **WebSocket** | An open telephone line between the browser and server allowing bidirectional data to flow instantly at any time. |
-| **Full-Duplex** | Both sides can talk and listen at the exact same moment (unlike half-duplex walkie-talkies). |
-| **TTFT (Time-to-First-Token)** | How many milliseconds it takes for the AI brain (LLM) to generate its very first word. |
-| **TTFA (Time-to-First-Audio)** | How many milliseconds it takes from when you stop speaking to when you hear the AI's first spoken sound. The golden conversational target is **under 500ms**. |
-| **Sentence Pipelining** | Generating and speaking the first sentence of an answer while the AI is still writing the rest of the answer in the background. |
-| **Barge-In** | The ability to interrupt the AI mid-sentence so it immediately stops talking and listens to you. |
-| **`AbortController`** | A special JavaScript tool that can instantly cancel a running network request or stream in mid-flight. |
-| **Audio Queue** | A line-up of audio clips waiting to be played one after another seamlessly with zero silence or gap in between. |
+| **Twilio** | A cloud service that gives software programs the ability to send SMS and answer real telephone calls. |
+| **TwiML** | Twilio Markup Language — simple XML instructions telling Twilio what to do with a call (e.g. `<Stream>` to open a real-time voice line). |
+| **Twilio Media Streams** | A high-speed bidirectional WebSocket stream connecting a phone call directly to a web server for real-time audio. |
+| **G.711 μ-law (mulaw)** | The international telephone audio standard (8,000 samples per second, 8-bit). It is the language all telephone networks speak. |
+| **VAD (Voice Activity Detection)** | Software that constantly measures audio volume and energy to know when a human is speaking vs when there is only silence. |
+| **RMS (Root Mean Square)** | The mathematical formula used to measure the true physical loudness/energy of sound waves. |
+| **Twilio `clear` Event** | A signal sent to Twilio during a call that instantly empties the caller's earpiece audio buffer for instant barge-in interruption. |
+| **Tunnel (ngrok)** | A secure bridge connecting a public website address on the internet to a server running on `localhost` on your home computer. |
 
 ---
 
-## 🛠️ How to Test Stage 3 Right Now
+## 🛠️ How to Test Stage 4 Right Now
 
 ### In Your Web Browser:
-1. Make sure your server is running (`npm run dev` or `node server.js`).
-2. Open **[http://localhost:3000](http://localhost:3000)**.
-3. Look at the top badge: it will say **🟢 WS Live (<500ms)**.
-4. Keep the mode set to **⚡ Live Stream (WebSocket <500ms)**.
-5. Click the **🎙️ Mic button** and speak, or type a question into the text box.
-6. Watch the words stream in real-time and hear the natural voice start speaking in under 500ms!
-7. While the agent is speaking, click **⚡ Interrupt (Barge-In)** — notice how it cuts off instantly!
+1. Open **[http://localhost:3000](http://localhost:3000)**.
+2. Click **📞 Phone Line (Twilio Stage 4)** in the mode selector.
+3. Check the **Twilio Webhook URL** and click **🔗 Test TwiML** to see the XML response.
+4. Click **📞 Start Test Call** to run an interactive virtual phone call and listen to the μ-law audio stream!
 
 ### In Your Terminal (PowerShell):
 ```powershell
-.\test-stage3-websocket.ps1
+.\test-stage4-phone.ps1
 ```
-This runs an automated end-to-end test connecting directly to the WebSocket server, testing the streaming pipeline, measuring the latency, and verifying interruption handling!
+This runs an automated end-to-end test verifying:
+1. Status diagnostics endpoint (`/api/twilio/status`)
+2. TwiML webhook XML response (`/twilio/incoming`)
+3. Call simulator (`/api/twilio/simulate-call`)
+4. Media Stream WebSocket connection (`/twilio/media-stream`)
+5. Initial greeting audio delivery in 8kHz μ-law
+6. Live phone barge-in interruption (`clear` event)
 
 ---
 
-## 🚀 What We Are Ready to Build Next (Stage 4 Roadmap)
-1. **Telephony Integration (Twilio / SIP):**
-   - Connecting our WebSocket voice stream to actual phone numbers so people can call the AI on their cellphones!
-2. **Client-Side Neural VAD (Voice Activity Detection):**
-   - Automatically detecting when you start and stop speaking without needing to press the mic button at all.
-3. **Custom Personalities & Character Prompts:**
-   - Giving our voice agent specialized roles like a hotel concierge, a tutor, or a customer support agent.
+## 🚀 What We Are Ready to Build Next (Stage 5 Roadmap)
+1. **Client-Side Neural VAD (Silero VAD):**
+   - Automatically detecting speech start and stop in the browser without pressing any buttons.
+2. **Custom Character Personas & System Prompts:**
+   - Tailored system personalities (Hotel Receptionist, Tech Support Specialist, Sales Representative, Catbot).
+3. **Multi-Turn Session Memory & Call History:**
+   - Persistent call logs, transcripts, and duration meters saved to disk.
+

@@ -507,6 +507,126 @@
       text-align: center;
       font-family: 'JetBrains Mono', monospace;
     }
+
+    /* Phone Line (Twilio Stage 4) Studio Styles */
+    .phone-studio {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 12px;
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    .phone-card {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 16px;
+      position: relative;
+    }
+
+    .phone-card-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #e2e8f0;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .webhook-display {
+      background: rgba(2, 6, 23, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: #38bdf8;
+      word-break: break-all;
+    }
+
+    .btn-action-small {
+      background: rgba(56, 189, 248, 0.2);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      color: #38bdf8;
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .btn-action-small:hover {
+      background: #38bdf8;
+      color: #0f172a;
+    }
+
+    .sim-progress-box {
+      background: rgba(2, 6, 23, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 12px;
+      margin-top: 10px;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 0.82rem;
+    }
+
+    .sim-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      line-height: 1.4;
+    }
+
+    .step-guide {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 0.82rem;
+      color: #cbd5e1;
+    }
+
+    .step-guide-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.02);
+      padding: 8px 10px;
+      border-radius: 8px;
+      border-left: 3px solid var(--accent);
+    }
+
+    .step-num {
+      background: rgba(192, 132, 252, 0.2);
+      color: #c084fc;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .phone-input-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
@@ -518,19 +638,26 @@
         <span id="aiBadge" class="badge badge-green">Groq LLM Stream</span>
         <span id="sttBadge" class="badge badge-blue">Whisper Turbo</span>
         <span id="ttsBadge" class="badge badge-purple">Mouth: Initializing</span>
+        <span id="phoneBadge" class="badge badge-purple">📞 Phone: Checking...</span>
       </div>
     </div>
-    <p class="subtitle">Stage 3 — Real-Time Streaming (WebSockets) with Sub-500ms Delay &amp; Barge-In</p>
+    <p class="subtitle">Stage 4 — Real Phone Line Connection (Twilio Media Streams) &amp; Ultra-Low Latency Streaming</p>
 
-    <!-- Mode Selector: Stage 3 (Real-Time WebSocket) vs Stage 2 (Batch HTTP) -->
+    <!-- Mode Selector: Stage 3 (Real-Time WebSocket) vs Stage 2 (Batch HTTP) vs Stage 4 (Twilio Phone) -->
     <div class="mode-selector">
       <button class="mode-btn active" id="modeWsBtn">
-        ⚡ Live Stream (<span style="color:#38bdf8;">WebSocket &lt;500ms</span>)
+        ⚡ Live Stream (<span style="color:#38bdf8;">WS &lt;500ms</span>)
       </button>
       <button class="mode-btn" id="modeHttpBtn">
-        📦 Batch Mode (HTTP Stage 2)
+        📦 Batch Mode (HTTP)
+      </button>
+      <button class="mode-btn" id="modePhoneBtn">
+        📞 Phone Line (<span style="color:#c084fc;">Twilio Stage 4</span>)
       </button>
     </div>
+
+    <!-- Container for Chat Modes (WS & HTTP) -->
+    <div id="chatStudio">
 
     <!-- Live Performance & Latency Telemetry Grid -->
     <div class="telemetry-grid">
@@ -639,7 +766,140 @@
     <div class="info-box" id="pipelineProtocolInfo">
       ⚡ WebSocket Stream: <code>ws://localhost:3000/ws/voice</code> • Sub-500ms Pipelined TTFA
     </div>
+  </div> <!-- /#chatStudio -->
+
+  <!-- Phone Line (Twilio Stage 4) Studio -->
+  <div id="phoneStudio" class="phone-studio" style="display: none;">
+    <!-- 1. Twilio Live Status & Inbound Webhook -->
+    <div class="phone-card">
+      <div class="phone-card-title">
+        <span>📞 Inbound Phone Line (Twilio Webhook)</span>
+        <span id="twilioStatusBadge" class="badge badge-green">Ready</span>
+      </div>
+      <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 10px;">
+        When someone calls your Twilio phone number, Twilio sends an HTTP request to this webhook to establish a live bidirectional audio stream.
+      </p>
+
+      <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; font-weight: 600;">Twilio Webhook URL:</div>
+      <div class="webhook-display">
+        <span id="webhookUrlText">http://localhost:3000/twilio/incoming</span>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="btn-action-small" id="copyWebhookBtn" title="Copy webhook URL">📋 Copy</button>
+          <a href="/twilio/incoming" target="_blank" class="btn-action-small" id="testTwimlLink" title="Preview TwiML XML in browser">🔗 Test TwiML</a>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 0.78rem; color: #94a3b8;">
+        <span>Twilio Number: <strong id="twilioNumberText" style="color:#f8fafc;">Not configured in .env</strong></span>
+        <a href="https://console.twilio.com" target="_blank" style="color: var(--primary); text-decoration: none;">Twilio Console ↗</a>
+      </div>
+    </div>
+
+    <!-- 2. Interactive Phone Call Simulator -->
+    <div class="phone-card">
+      <div class="phone-card-title">
+        <span>🧪 Test Phone Call Simulation (Live Audio)</span>
+        <span class="badge badge-blue">G.711 μ-law (8kHz)</span>
+      </div>
+      <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 10px;">
+        Simulate an entire telephone call directly in your browser. Bella greets, transcribes speech, and replies in authentic 8000Hz μ-law telephone audio.
+      </p>
+
+      <div class="phone-input-row">
+        <input type="text" id="simCallerPrompt" value="Hello! What can you help me with on this phone call?" placeholder="What should the caller ask?" />
+        <button type="button" class="btn btn-send" id="simCallBtn" style="white-space: nowrap;">📞 Start Test Call</button>
+      </div>
+
+      <!-- Simulation Progress & Live Audio Player -->
+      <div id="simProgressBox" class="sim-progress-box">
+        <div class="sim-step" id="simStep1">
+          <span class="sim-step-icon">📞</span>
+          <div><strong>Calling Twilio Media Stream...</strong> Connected to WebSocket with StreamSid</div>
+        </div>
+        <div class="sim-step" id="simStep2">
+          <span class="sim-step-icon">🗣️</span>
+          <div>
+            <strong>AI Phone Greeting:</strong>
+            <div id="simGreetingText" style="color: #c084fc; margin-top: 2px;">"Hello! Thank you for calling..."</div>
+            <button type="button" class="btn-action-small" id="playGreetingAudioBtn" style="margin-top: 4px; display: none;">🔊 Listen to μ-law Greeting</button>
+          </div>
+        </div>
+        <div class="sim-step" id="simStep3">
+          <span class="sim-step-icon">🎙️</span>
+          <div>
+            <strong>Caller Utterance (VAD Detected):</strong>
+            <div id="simCallerText" style="color: #38bdf8; margin-top: 2px;"></div>
+          </div>
+        </div>
+        <div class="sim-step" id="simStep4">
+          <span class="sim-step-icon">🤖</span>
+          <div>
+            <strong>AI Telephone Reply (ElevenLabs μ-law 8kHz):</strong>
+            <div id="simReplyText" style="color: #34d399; margin-top: 2px;"></div>
+            <button type="button" class="btn-action-small" id="playReplyAudioBtn" style="margin-top: 4px; display: none;">🔊 Listen to μ-law Reply</button>
+          </div>
+        </div>
+        <div class="sim-step" id="simStep5">
+          <span class="sim-step-icon">⚡</span>
+          <div><strong style="color: #fca5a5;">Live Telephone Barge-In:</strong> Ready! Sending speech triggers instant Twilio <code>clear</code> event.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Outbound Phone Dialer -->
+    <div class="phone-card">
+      <div class="phone-card-title">
+        <span>📱 Outbound Call (Dial Any Phone)</span>
+        <span class="badge badge-purple">Twilio REST API</span>
+      </div>
+      <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 10px;">
+        Make the AI call your personal mobile phone and speak to you live. (Requires Twilio Account SID &amp; Auth Token in <code>.env</code>).
+      </p>
+
+      <div class="phone-input-row">
+        <input type="text" id="outboundPhoneInput" placeholder="+1234567890 (E.164 format with country code)" />
+        <button type="button" class="btn btn-send" id="outboundCallBtn" style="white-space: nowrap;">📞 Call My Phone</button>
+      </div>
+      <div id="outboundStatusMsg" style="font-size: 0.78rem; margin-top: 6px; display: none;"></div>
+    </div>
+
+    <!-- 4. Simple 3-Step Setup Guide -->
+    <div class="phone-card">
+      <div class="phone-card-title">
+        <span>📖 How to Connect Your Real Phone Number (In Simple Words)</span>
+      </div>
+      <div class="step-guide">
+        <div class="step-guide-item">
+          <div class="step-num">1</div>
+          <div>
+            <strong>Make your local server public:</strong> Open a new PowerShell terminal and run:
+            <code style="color:#38bdf8; background:rgba(0,0,0,0.4); padding:2px 6px; border-radius:4px; display:inline-block; margin-top:3px;">ngrok http 3000</code>
+            or <code style="color:#38bdf8; background:rgba(0,0,0,0.4); padding:2px 6px; border-radius:4px;">npx localtunnel --port 3000</code>
+          </div>
+        </div>
+        <div class="step-guide-item">
+          <div class="step-num">2</div>
+          <div>
+            <strong>Save your public URL:</strong> Copy the <code>https://...</code> URL from ngrok and paste it into your <code style="color:#c084fc;">.env</code> file under <code style="color:#c084fc;">PUBLIC_URL=https://your-domain.ngrok-free.app</code>.
+          </div>
+        </div>
+        <div class="step-guide-item">
+          <div class="step-num">3</div>
+          <div>
+            <strong>Attach to Twilio Number:</strong> Open your <a href="https://console.twilio.com" target="_blank" style="color:var(--primary);">Twilio Console</a> ➡️ Phone Numbers ➡️ Manage ➡️ Active Numbers ➡️ Click your phone number ➡️ Under <strong>"A CALL COMES IN"</strong>, select <strong>Webhook (HTTP POST)</strong> and paste:
+            <div style="font-family:'JetBrains Mono',monospace; color:#38bdf8; margin-top:3px;">https://your-domain.ngrok-free.app/twilio/incoming</div>
+          </div>
+        </div>
+        <div class="step-guide-item">
+          <div class="step-num">4</div>
+          <div>
+            <strong>Pick up your cell phone and dial!</strong> The phone will ring, your AI assistant will answer with Bella's voice, and you can converse naturally with sub-second delay!
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
+</div>
 
   <script>
     // Elements
@@ -659,11 +919,32 @@
     const wsBadge = document.getElementById('wsBadge');
     const aiBadge = document.getElementById('aiBadge');
     const sttBadge = document.getElementById('sttBadge');
-    const ttsBadge = document.getElementById('ttsBadge');
     const modeWsBtn = document.getElementById('modeWsBtn');
     const modeHttpBtn = document.getElementById('modeHttpBtn');
+    const modePhoneBtn = document.getElementById('modePhoneBtn');
     const testVoiceBtn = document.getElementById('testVoiceBtn');
     const pipelineProtocolInfo = document.getElementById('pipelineProtocolInfo');
+
+    // Phone Studio Elements
+    const chatStudio = document.getElementById('chatStudio');
+    const phoneStudio = document.getElementById('phoneStudio');
+    const phoneBadge = document.getElementById('phoneBadge');
+    const twilioStatusBadge = document.getElementById('twilioStatusBadge');
+    const webhookUrlText = document.getElementById('webhookUrlText');
+    const copyWebhookBtn = document.getElementById('copyWebhookBtn');
+    const testTwimlLink = document.getElementById('testTwimlLink');
+    const twilioNumberText = document.getElementById('twilioNumberText');
+    const simCallerPrompt = document.getElementById('simCallerPrompt');
+    const simCallBtn = document.getElementById('simCallBtn');
+    const simProgressBox = document.getElementById('simProgressBox');
+    const simGreetingText = document.getElementById('simGreetingText');
+    const simCallerText = document.getElementById('simCallerText');
+    const simReplyText = document.getElementById('simReplyText');
+    const playGreetingAudioBtn = document.getElementById('playGreetingAudioBtn');
+    const playReplyAudioBtn = document.getElementById('playReplyAudioBtn');
+    const outboundPhoneInput = document.getElementById('outboundPhoneInput');
+    const outboundCallBtn = document.getElementById('outboundCallBtn');
+    const outboundStatusMsg = document.getElementById('outboundStatusMsg');
 
     // Telemetry display elements
     const metricTtfa = document.getElementById('metricTtfa');
@@ -1293,6 +1574,197 @@
       }
     });
 
+    // ==============================================
+    // Phone Studio & Twilio Mode Logic (Stage 4)
+    // ==============================================
+
+    // Mode Switching
+    function switchMode(newMode) {
+      activeMode = newMode;
+      modeWsBtn.classList.remove('active');
+      modeHttpBtn.classList.remove('active');
+      modePhoneBtn.classList.remove('active');
+
+      if (newMode === 'websocket') {
+        modeWsBtn.classList.add('active');
+        chatStudio.style.display = 'block';
+        phoneStudio.style.display = 'none';
+        pipelineProtocolInfo.innerHTML = '⚡ WebSocket Stream: <code>ws://localhost:3000/ws/voice</code> • Sub-500ms Pipelined TTFA';
+      } else if (newMode === 'http') {
+        modeHttpBtn.classList.add('active');
+        chatStudio.style.display = 'block';
+        phoneStudio.style.display = 'none';
+        pipelineProtocolInfo.innerHTML = '📦 Batch HTTP Pipeline: <code>POST /voice-chat</code> • Standard Response';
+      } else if (newMode === 'phone') {
+        modePhoneBtn.classList.add('active');
+        chatStudio.style.display = 'none';
+        phoneStudio.style.display = 'flex';
+        pipelineProtocolInfo.innerHTML = '📞 Twilio Phone Line Stream: <code>ws://localhost:3000/twilio/media-stream</code> • G.711 μ-law (8kHz)';
+      }
+    }
+
+    modeWsBtn.addEventListener('click', () => switchMode('websocket'));
+    modeHttpBtn.addEventListener('click', () => switchMode('http'));
+    modePhoneBtn.addEventListener('click', () => switchMode('phone'));
+
+    // G.711 μ-law Web Audio Decoder (plays 8kHz μ-law audio through browser audio context)
+    function decodeMulawToAudioBuffer(base64Mulaw, sampleRate = 8000) {
+      const binaryString = atob(base64Mulaw);
+      const len = binaryString.length;
+      const mulawBytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        mulawBytes[i] = binaryString.charCodeAt(i);
+      }
+
+      const ctx = getAudioContext();
+      const audioBuffer = ctx.createBuffer(1, len, sampleRate);
+      const channelData = audioBuffer.getChannelData(0);
+
+      for (let i = 0; i < len; i++) {
+        const mulawByte = mulawBytes[i];
+        const inverted = ~mulawByte & 0xFF;
+        const sign = inverted & 0x80;
+        const exponent = (inverted & 0x70) >> 4;
+        const mantissa = inverted & 0x0F;
+        let sample = ((mantissa << 3) + 0x84) << exponent;
+        sample -= 0x84;
+        const pcm16 = sign !== 0 ? -sample : sample;
+        channelData[i] = pcm16 / 32768; // Float32 normalized audio
+      }
+      return audioBuffer;
+    }
+
+    let activeSimAudioSource = null;
+    function playMulawAudio(base64Mulaw) {
+      if (!base64Mulaw) return null;
+      if (activeSimAudioSource) {
+        try { activeSimAudioSource.stop(); } catch(e) {}
+      }
+      const ctx = getAudioContext();
+      const buffer = decodeMulawToAudioBuffer(base64Mulaw, 8000);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start();
+      activeSimAudioSource = source;
+      return source;
+    }
+
+    // Copy Webhook URL to clipboard
+    copyWebhookBtn.addEventListener('click', () => {
+      const textToCopy = webhookUrlText.textContent.trim();
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        copyWebhookBtn.textContent = '✅ Copied!';
+        setTimeout(() => { copyWebhookBtn.textContent = '📋 Copy'; }, 2000);
+      });
+    });
+
+    // Interactive Phone Call Simulator Handler
+    let currentSimGreetingAudio = null;
+    let currentSimReplyAudio = null;
+
+    simCallBtn.addEventListener('click', async () => {
+      const prompt = simCallerPrompt.value.trim() || 'Hello! What can you help me with on this phone call?';
+      simCallBtn.disabled = true;
+      simCallBtn.textContent = '⏳ Call Connecting...';
+      simProgressBox.style.display = 'flex';
+
+      simGreetingText.textContent = 'Synthesizing 8kHz phone greeting...';
+      simCallerText.textContent = prompt;
+      simReplyText.textContent = 'Processing speech with Groq LLM & ElevenLabs μ-law...';
+      playGreetingAudioBtn.style.display = 'none';
+      playReplyAudioBtn.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/twilio/simulate-call', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userMessage: prompt })
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Phone call simulation failed.');
+        }
+
+        // 1. Spoken Greeting
+        simGreetingText.textContent = `"${data.stages.greeting.text}"`;
+        currentSimGreetingAudio = data.stages.greeting.audioBase64;
+        if (currentSimGreetingAudio) {
+          playGreetingAudioBtn.style.display = 'inline-flex';
+          // Automatically play greeting audio through browser audio context!
+          playMulawAudio(currentSimGreetingAudio);
+        }
+
+        // 2. Caller Utterance
+        simCallerText.textContent = `"${data.stages.callerUtterance}"`;
+
+        // 3. AI Reply
+        simReplyText.textContent = `"${data.stages.brainReply.text}"`;
+        currentSimReplyAudio = data.stages.brainReply.audioBase64;
+        if (currentSimReplyAudio) {
+          playReplyAudioBtn.style.display = 'inline-flex';
+          // Play reply audio after a short delay
+          setTimeout(() => {
+            playMulawAudio(currentSimReplyAudio);
+          }, 3500);
+        }
+
+      } catch (simErr) {
+        simReplyText.textContent = '⚠️ Error: ' + simErr.message;
+      } finally {
+        simCallBtn.disabled = false;
+        simCallBtn.textContent = '📞 Start Test Call';
+      }
+    });
+
+    playGreetingAudioBtn.addEventListener('click', () => {
+      if (currentSimGreetingAudio) playMulawAudio(currentSimGreetingAudio);
+    });
+
+    playReplyAudioBtn.addEventListener('click', () => {
+      if (currentSimReplyAudio) playMulawAudio(currentSimReplyAudio);
+    });
+
+    // Outbound Phone Call Handler
+    outboundCallBtn.addEventListener('click', async () => {
+      const toNumber = outboundPhoneInput.value.trim();
+      if (!toNumber) {
+        outboundStatusMsg.style.display = 'block';
+        outboundStatusMsg.style.color = '#f87171';
+        outboundStatusMsg.textContent = '⚠️ Please enter a valid phone number (e.g. +1234567890)';
+        return;
+      }
+
+      outboundCallBtn.disabled = true;
+      outboundCallBtn.textContent = '⏳ Dialing...';
+      outboundStatusMsg.style.display = 'block';
+      outboundStatusMsg.style.color = '#38bdf8';
+      outboundStatusMsg.textContent = `Dialing ${toNumber} via Twilio REST API...`;
+
+      try {
+        const res = await fetch('/api/twilio/call', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: toNumber })
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Failed to place outbound call.');
+        }
+
+        outboundStatusMsg.style.color = '#34d399';
+        outboundStatusMsg.textContent = `✅ Call placed successfully! Call SID: ${data.callSid}. Your phone is ringing!`;
+      } catch (err) {
+        outboundStatusMsg.style.color = '#f87171';
+        outboundStatusMsg.textContent = `❌ ${err.message} (Add TWILIO_ACCOUNT_SID & TWILIO_AUTH_TOKEN to .env to enable live outbound calls)`;
+      } finally {
+        outboundCallBtn.disabled = false;
+        outboundCallBtn.textContent = '📞 Call My Phone';
+      }
+    });
+
     // Initial Health and Status Check
     async function initAgent() {
       try {
@@ -1333,6 +1805,34 @@
             voiceSelect.appendChild(opt);
           });
         }
+
+        // Fetch Twilio Telephony Diagnostics
+        try {
+          const twilioRes = await fetch('/api/twilio/status').then(r => r.json());
+          if (twilioRes.isConfigured) {
+            phoneBadge.className = 'badge badge-green';
+            phoneBadge.textContent = '📞 Twilio Active';
+            twilioStatusBadge.className = 'badge badge-green';
+            twilioStatusBadge.textContent = '🟢 Configured';
+          } else {
+            phoneBadge.className = 'badge badge-purple';
+            phoneBadge.textContent = '📞 Twilio Ready';
+            twilioStatusBadge.className = 'badge badge-purple';
+            twilioStatusBadge.textContent = 'ℹ️ Simulator Ready';
+          }
+
+          if (twilioRes.webhooks?.incomingVoiceUrl) {
+            webhookUrlText.textContent = twilioRes.webhooks.incomingVoiceUrl;
+            testTwimlLink.href = twilioRes.webhooks.incomingVoiceUrl;
+          }
+
+          if (twilioRes.twilio?.phoneNumber && twilioRes.twilio.phoneNumber !== 'Not set in .env') {
+            twilioNumberText.textContent = twilioRes.twilio.phoneNumber;
+          }
+        } catch (twErr) {
+          console.warn('Twilio status fetch warning:', twErr);
+        }
+
       } catch (e) {
         console.warn('Backend init check warning:', e);
       }

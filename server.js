@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import Groq, { toFile } from "groq-sdk";
 import multer from "multer";
 import { WebSocketServer, WebSocket } from "ws";
+import twilio from "twilio";
 
 // Load variables from .env into process.env
 dotenv.config();
@@ -14,6 +15,7 @@ const PORT = process.env.PORT || 3000;
 
 // Configuration Keys & Dynamic Environment Loader
 let groq = null;
+let twilioClient = null;
 
 function getEnv() {
   dotenv.config({ override: true });
@@ -23,6 +25,10 @@ function getEnv() {
   const defaultVoice = (process.env.ELEVENLABS_VOICE_ID || "EXAVITQu4vr4xnSDxMaL").trim(); // Bella (Free Tier & Pro)
   const deepgramKey = (process.env.DEEPGRAM_API_KEY || "").trim();
   const openaiKey = (process.env.OPEN_AI_API_KEY || process.env.OPENAI_API_KEY || "").trim();
+  const twilioAccountSid = (process.env.TWILIO_ACCOUNT_SID || "").trim();
+  const twilioAuthToken = (process.env.TWILIO_AUTH_TOKEN || "").trim();
+  const twilioPhoneNumber = (process.env.TWILIO_PHONE_NUMBER || "").trim();
+  const publicUrl = (process.env.PUBLIC_URL || "").trim();
 
   // Sync Groq client whenever key is updated
   if (groqKey) {
@@ -33,13 +39,29 @@ function getEnv() {
     groq = null;
   }
 
+  // Sync Twilio client whenever credentials are provided
+  if (twilioAccountSid && twilioAuthToken && twilioAccountSid.startsWith("AC")) {
+    try {
+      twilioClient = twilio(twilioAccountSid, twilioAuthToken);
+    } catch (twErr) {
+      console.warn("[TWILIO] Client initialization error:", twErr.message);
+      twilioClient = null;
+    }
+  } else {
+    twilioClient = null;
+  }
+
   return {
     GROQ_API_KEY: groqKey,
     GROQ_MODEL: groqModel,
     ELEVENLABS_API_KEY: elevenlabsKey,
     DEFAULT_ELEVENLABS_VOICE: defaultVoice,
     DEEPGRAM_API_KEY: deepgramKey,
-    OPENAI_API_KEY: openaiKey
+    OPENAI_API_KEY: openaiKey,
+    TWILIO_ACCOUNT_SID: twilioAccountSid,
+    TWILIO_AUTH_TOKEN: twilioAuthToken,
+    TWILIO_PHONE_NUMBER: twilioPhoneNumber,
+    PUBLIC_URL: publicUrl
   };
 }
 
@@ -97,6 +119,97 @@ class ConcurrencyLimiter {
 
 const elevenLabsLimiter = new ConcurrencyLimiter(2);
 
+// ==========================================================
+// Telephony Audio Engine: G.711 μ-law (8000Hz) & VAD Utilities
+// ==========================================================
+
+// Precomputed 256-entry lookup table for G.711 μ-law to 16-bit linear PCM conversion
+const MU_LAW_DECODE_TABLE = new Int16Array(256);
+for (let i = 0; i < 256; i++) {
+  const inverted = ~i & 0xFF;
+  const sign = inverted & 0x80;
+  const exponent = (inverted & 0x70) >> 4;
+  const mantissa = inverted & 0x0F;
+  let sample = ((mantissa << 3) + 0x84) << exponent;
+  sample -= 0x84;
+  MU_LAW_DECODE_TABLE[i] = sign !== 0 ? -sample : sample;
+}
+
+// Convert single 16-bit linear PCM sample to G.711 μ-law byte
+function pcmSampleToMulaw(sample) {
+  const BIAS = 0x84;
+  const CLIP = 32635;
+  let sign = (sample >> 8) & 0x80;
+  if (sign !== 0) sample = -sample;
+  if (sample > CLIP) sample = CLIP;
+  sample = (sample + BIAS) >> 2;
+
+  let exponent = 7;
+  for (let expMask = 0x4000; (sample & expMask) === 0 && exponent > 0; expMask >>= 1) {
+    exponent--;
+  }
+  const mantissa = (sample >> (exponent + 3)) & 0x0F;
+  const mulawByte = ~(sign | (exponent << 4) | mantissa);
+  return mulawByte & 0xFF;
+}
+
+// Convert a buffer of 16-bit linear PCM samples to 8-bit μ-law buffer
+function pcmToMulaw(pcmBuffer) {
+  const numSamples = Math.floor(pcmBuffer.length / 2);
+  const mulawBuffer = Buffer.alloc(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const sample = pcmBuffer.readInt16LE(i * 2);
+    mulawBuffer[i] = pcmSampleToMulaw(sample);
+  }
+  return mulawBuffer;
+}
+
+// Generate a valid 44-byte standard RIFF WAV header for linear PCM audio
+function createWavHeader(dataLength, sampleRate = 8000, numChannels = 1, bitsPerSample = 16) {
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+  const buffer = Buffer.alloc(44);
+
+  buffer.write("RIFF", 0);
+  buffer.writeUInt32LE(36 + dataLength, 4); // ChunkSize: 36 + SubChunk2Size
+  buffer.write("WAVE", 8);
+  buffer.write("fmt ", 12);
+  buffer.writeUInt32LE(16, 16); // Subchunk1Size (16 for PCM)
+  buffer.writeUInt16LE(1, 20); // AudioFormat (1 = Linear PCM)
+  buffer.writeUInt16LE(numChannels, 22); // Mono (1)
+  buffer.writeUInt32LE(sampleRate, 24); // 8000 Hz or 16000 Hz
+  buffer.writeUInt32LE(byteRate, 28); // ByteRate
+  buffer.writeUInt16LE(blockAlign, 32); // BlockAlign
+  buffer.writeUInt16LE(bitsPerSample, 34); // BitsPerSample (16)
+  buffer.write("data", 36);
+  buffer.writeUInt32LE(dataLength, 40); // Subchunk2Size
+
+  return buffer;
+}
+
+// Convert 8kHz μ-law audio buffer directly to a standard 16-bit linear PCM WAV buffer
+function mulawToWav(mulawBuffer, sampleRate = 8000) {
+  const numSamples = mulawBuffer.length;
+  const pcmBuffer = Buffer.alloc(numSamples * 2);
+  for (let i = 0; i < numSamples; i++) {
+    const pcmSample = MU_LAW_DECODE_TABLE[mulawBuffer[i]];
+    pcmBuffer.writeInt16LE(pcmSample, i * 2);
+  }
+  const header = createWavHeader(pcmBuffer.length, sampleRate, 1, 16);
+  return Buffer.concat([header, pcmBuffer]);
+}
+
+// Calculate Root Mean Square (RMS) energy on μ-law audio to detect speech vs silence (VAD)
+function calculateRms(mulawBuffer) {
+  if (!mulawBuffer || mulawBuffer.length === 0) return 0;
+  let sumSquares = 0;
+  for (let i = 0; i < mulawBuffer.length; i++) {
+    const sample = MU_LAW_DECODE_TABLE[mulawBuffer[i]];
+    sumSquares += sample * sample;
+  }
+  return Math.sqrt(sumSquares / mulawBuffer.length);
+}
+
 // Strip markdown characters and noisy symbols before sending to TTS
 function cleanTextForSpeech(rawText) {
   if (!rawText) return "";
@@ -110,8 +223,8 @@ function cleanTextForSpeech(rawText) {
     .trim();
 }
 
-// Helper: Synthesize speech with ElevenLabs (with concurrency limiter & 429 retry)
-async function synthesizeElevenLabs(text, voiceId, signal = null, retries = 2) {
+// Helper: Synthesize speech with ElevenLabs (with concurrency limiter, 429 retry, and telephony ulaw_8000 support)
+async function synthesizeElevenLabs(text, voiceId, signal = null, retries = 2, outputFormat = "mp3_44100_128") {
   const env = getEnv();
   const apiKey = env.ELEVENLABS_API_KEY;
   const targetVoice = voiceId || env.DEFAULT_ELEVENLABS_VOICE;
@@ -133,6 +246,8 @@ async function synthesizeElevenLabs(text, voiceId, signal = null, retries = 2) {
     return Buffer.alloc(0);
   }
 
+  const acceptHeader = outputFormat === "ulaw_8000" ? "audio/basic" : "audio/mpeg";
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     if (signal && signal.aborted) {
       throw new Error("Aborted");
@@ -142,12 +257,12 @@ async function synthesizeElevenLabs(text, voiceId, signal = null, retries = 2) {
       return await elevenLabsLimiter.run(async () => {
         if (signal && signal.aborted) throw new Error("Aborted");
 
-        let response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoice}/stream?optimize_streaming_latency=3&output_format=mp3_44100_128`, {
+        let response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoice}/stream?optimize_streaming_latency=3&output_format=${outputFormat}`, {
           method: "POST",
           headers: {
             "xi-api-key": apiKey,
             "Content-Type": "application/json",
-            "Accept": "audio/mpeg"
+            "Accept": acceptHeader
           },
           body: JSON.stringify({
             text: cleanText,
@@ -169,12 +284,12 @@ async function synthesizeElevenLabs(text, voiceId, signal = null, retries = 2) {
         if (!response.ok) {
           const errorText = await response.text();
           if (response.status === 404 || (response.status === 400 && errorText.includes("model"))) {
-            response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoice}/stream?optimize_streaming_latency=3&output_format=mp3_44100_128`, {
+            response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoice}/stream?optimize_streaming_latency=3&output_format=${outputFormat}`, {
               method: "POST",
               headers: {
                 "xi-api-key": apiKey,
                 "Content-Type": "application/json",
-                "Accept": "audio/mpeg"
+                "Accept": acceptHeader
               },
               body: JSON.stringify({
                 text: cleanText,
@@ -277,6 +392,16 @@ app.get("/api/health", (req, res) => {
       bargeInSupported: true,
       targetLatency: "<500ms"
     },
+    stage4: {
+      phoneLineConnection: true,
+      provider: "Twilio",
+      mediaStreamWsPath: "/twilio/media-stream",
+      incomingWebhookPath: "/twilio/incoming",
+      audioEncoding: "audio/x-mulaw (8000Hz G.711u)",
+      telephonyVAD: true,
+      phoneBargeIn: true,
+      isConfigured: Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER)
+    },
     services: {
       llm: {
         provider: "Groq Cloud",
@@ -292,11 +417,19 @@ app.get("/api/health", (req, res) => {
       tts: {
         elevenlabs: isKeyFormatValid,
         model: "eleven_flash_v2_5",
+        telephonyFormat: "ulaw_8000",
         fallback: "browser-speech-synthesis",
         defaultVoice: env.DEFAULT_ELEVENLABS_VOICE,
         keyPresent: Boolean(env.ELEVENLABS_API_KEY),
         keyValidFormat: isKeyFormatValid,
         concurrencyLimit: 2
+      },
+      twilio: {
+        configured: Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER),
+        accountSidPresent: Boolean(env.TWILIO_ACCOUNT_SID),
+        phoneNumber: env.TWILIO_PHONE_NUMBER || "Not configured",
+        publicUrl: env.PUBLIC_URL || "http://localhost:3000",
+        incomingWebhook: `${(env.PUBLIC_URL || "http://localhost:3000").replace(/\/$/, "")}/twilio/incoming`
       },
       openai: {
         configured: Boolean(env.OPENAI_API_KEY),
@@ -591,10 +724,34 @@ app.post("/voice-chat", upload.single("audio"), async (req, res) => {
 });
 
 // ==============================================
-// 7. Stage 3: Real-Time Streaming WebSocket Server (/ws/voice)
+// 7. WebSocket Servers: Browser Studio (/ws/voice) & Twilio Telephony (/twilio/media-stream)
 // ==============================================
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: "/ws/voice" });
+const browserWss = new WebSocketServer({ noServer: true });
+const twilioWss = new WebSocketServer({ noServer: true });
+
+// Route HTTP Upgrade to correct WebSocket Server based on request path
+server.on("upgrade", (request, socket, head) => {
+  try {
+    const host = request.headers.host || `localhost:${PORT}`;
+    const url = new URL(request.url, `http://${host}`);
+    const pathname = url.pathname;
+
+    if (pathname === "/ws/voice") {
+      browserWss.handleUpgrade(request, socket, head, (ws) => {
+        browserWss.emit("connection", ws, request);
+      });
+    } else if (pathname === "/twilio/media-stream") {
+      twilioWss.handleUpgrade(request, socket, head, (ws) => {
+        twilioWss.emit("connection", ws, request);
+      });
+    } else {
+      socket.destroy();
+    }
+  } catch (err) {
+    socket.destroy();
+  }
+});
 
 // Safe JSON sender for WebSocket clients
 function safeSend(ws, messageObj) {
@@ -922,8 +1079,8 @@ async function handleStreamingPipeline(ws, session, userText, sttLatencyMs = 0) 
   }
 }
 
-// WebSocket Connection Lifecycle
-wss.on("connection", (ws, req) => {
+// Browser Web Studio WebSocket Connection Lifecycle (/ws/voice)
+browserWss.on("connection", (ws, req) => {
   const sessionId = "sess_" + Math.random().toString(36).substring(2, 9);
   console.log(`[WS CONNECTED] Client connected (${sessionId}) from ${req.socket.remoteAddress}`);
 
@@ -1100,23 +1257,547 @@ wss.on("connection", (ws, req) => {
   });
 });
 
+// ==============================================
+// 8. Stage 4: Twilio Media Streams Telephony Engine (/twilio/media-stream)
+// ==============================================
+
+// Helper: Stream synthesized speech chunk as μ-law 8kHz audio to an active Twilio Media Stream
+async function streamSentenceToTwilio(ws, session, sentence, signal) {
+  if (signal && signal.aborted) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN || !session.streamSid) return;
+
+  const env = getEnv();
+  console.log(`[TWILIO TTS] Synthesizing for phone: "${sentence.substring(0, 45)}..."`);
+
+  let mulawAudio = null;
+  if (env.ELEVENLABS_API_KEY && env.ELEVENLABS_API_KEY.startsWith("sk_")) {
+    try {
+      mulawAudio = await synthesizeElevenLabs(
+        sentence,
+        session.voiceId || env.DEFAULT_ELEVENLABS_VOICE,
+        signal,
+        2,
+        "ulaw_8000" // ElevenLabs telephony format (8000Hz μ-law)
+      );
+    } catch (ttsErr) {
+      if (signal && signal.aborted) return;
+      console.warn(`[TWILIO TTS WARNING] ElevenLabs ulaw_8000 failed:`, ttsErr.message);
+    }
+  }
+
+  // If ElevenLabs returned μ-law audio, transmit in 640-byte packets (80ms batches at 8kHz)
+  if (mulawAudio && mulawAudio.length > 0) {
+    if (signal && signal.aborted) return;
+    session.isAiSpeaking = true;
+    const packetSize = 640;
+
+    for (let offset = 0; offset < mulawAudio.length; offset += packetSize) {
+      if (signal && signal.aborted) {
+        session.isAiSpeaking = false;
+        return;
+      }
+      const packet = mulawAudio.subarray(offset, Math.min(offset + packetSize, mulawAudio.length));
+      ws.send(
+        JSON.stringify({
+          event: "media",
+          streamSid: session.streamSid,
+          media: {
+            payload: packet.toString("base64")
+          }
+        })
+      );
+    }
+
+    // Send mark event so we know when Twilio finishes playback of this sentence
+    if (!signal.aborted) {
+      ws.send(
+        JSON.stringify({
+          event: "mark",
+          streamSid: session.streamSid,
+          mark: {
+            name: `chunk_${session.chunkCounter++}`
+          }
+        })
+      );
+    }
+  }
+}
+
+// Helper: Process caller speech audio (G.711 μ-law) ➡️ Whisper STT ➡️ Groq LLM ➡️ ElevenLabs μ-law
+async function handleTwilioCallerUtterance(ws, session, mulawBuffer) {
+  if (session.abortController) {
+    session.abortController.abort();
+  }
+  session.abortController = new AbortController();
+  const signal = session.abortController.signal;
+  session.isAiSpeaking = true;
+
+  try {
+    // 1. EARS: Convert μ-law audio to standard WAV and transcribe via Whisper Turbo
+    const wavBuffer = mulawToWav(mulawBuffer, 8000);
+    console.log(`[TWILIO STT] Transcribing ${(wavBuffer.length / 1024).toFixed(1)} KB caller audio...`);
+
+    let callerText = "";
+    if (groq) {
+      callerText = await transcribeWithWhisper(wavBuffer, "caller.wav", "audio/wav");
+    } else {
+      callerText = "Hello! What can you do?";
+    }
+
+    if (!callerText || !callerText.trim()) {
+      console.log(`[TWILIO STT] No intelligible words recognized.`);
+      session.isAiSpeaking = false;
+      return;
+    }
+
+    console.log(`[TWILIO CALLER SAID] "${callerText}"`);
+
+    // Add to session conversation history
+    session.history.push({ role: "user", content: callerText });
+    if (session.history.length > 6) {
+      session.history = session.history.slice(-6);
+    }
+
+    // 2. BRAIN: Stream response from Groq LLM
+    const env = getEnv();
+    if (!groq) {
+      // Simulation mode
+      const reply = "I heard you say: " + callerText + ". The Twilio phone line connection is active!";
+      await streamSentenceToTwilio(ws, session, reply, signal);
+      session.isAiSpeaking = false;
+      return;
+    }
+
+    const stream = await groq.chat.completions.create(
+      {
+        model: env.GROQ_MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a friendly, knowledgeable AI telephone assistant on a live phone call. Keep answers clear, natural, and concise (1 to 2 short sentences), so the caller can easily follow over the telephone."
+          },
+          ...session.history
+        ],
+        max_tokens: 400,
+        temperature: 0.7,
+        stream: true,
+        ...(env.GROQ_MODEL.includes("gpt-oss") ? { reasoning_effort: "low" } : {})
+      },
+      { signal }
+    );
+
+    let fullReply = "";
+    let sentenceBuffer = "";
+
+    for await (const chunk of stream) {
+      if (signal.aborted) break;
+      const token = chunk.choices[0]?.delta?.content || "";
+      if (!token) continue;
+      fullReply += token;
+      sentenceBuffer += token;
+
+      // Split at sentence boundaries
+      let splitPos = -1;
+      let delimLen = 0;
+      const termMatch = sentenceBuffer.match(/([.!?\u06D4])(\s+|$)/);
+      if (termMatch && termMatch.index + termMatch[1].length >= 20) {
+        splitPos = termMatch.index + termMatch[1].length;
+        delimLen = termMatch[2].length;
+      } else if (sentenceBuffer.length >= 55 && sentenceBuffer.includes(",")) {
+        splitPos = sentenceBuffer.indexOf(",") + 1;
+        delimLen = 1;
+      }
+
+      if (splitPos !== -1) {
+        const sentenceToSynthesize = sentenceBuffer.substring(0, splitPos).trim();
+        sentenceBuffer = sentenceBuffer.substring(splitPos + delimLen);
+        if (sentenceToSynthesize && /[a-zA-Z0-9\u0600-\u06FF]/.test(sentenceToSynthesize)) {
+          await streamSentenceToTwilio(ws, session, sentenceToSynthesize, signal);
+        }
+      }
+    }
+
+    // Flush leftover text
+    if (!signal.aborted && sentenceBuffer.trim()) {
+      await streamSentenceToTwilio(ws, session, sentenceBuffer.trim(), signal);
+    }
+
+    if (!signal.aborted) {
+      session.history.push({ role: "assistant", content: fullReply });
+      console.log(`[TWILIO BRAIN REPLIED] "${fullReply}"`);
+    }
+  } catch (err) {
+    if (signal.aborted) {
+      console.log(`[TWILIO STREAM] Stream interrupted by caller barge-in.`);
+    } else {
+      console.error(`[TWILIO PIPELINE ERROR]`, err.message);
+    }
+  } finally {
+    session.isAiSpeaking = false;
+  }
+}
+
+// Twilio Media Stream WebSocket Connection Lifecycle (/twilio/media-stream)
+twilioWss.on("connection", (ws, req) => {
+  const sessionId = "tw_sess_" + Math.random().toString(36).substring(2, 9);
+  console.log(`\n📞 [TWILIO WS CONNECTED] Phone media stream established (${sessionId}) from ${req.socket.remoteAddress}`);
+
+  const env = getEnv();
+  const session = {
+    id: sessionId,
+    streamSid: null,
+    callSid: null,
+    voiceId: env.DEFAULT_ELEVENLABS_VOICE,
+    abortController: null,
+    isAiSpeaking: false,
+    callerAudioChunks: [],
+    isSpeaking: false,
+    silenceChunks: 0,
+    speechChunksCount: 0,
+    chunkCounter: 0,
+    history: []
+  };
+
+  ws.on("message", async (data) => {
+    try {
+      let msg;
+      try {
+        msg = JSON.parse(data.toString("utf8"));
+      } catch (parseErr) {
+        return;
+      }
+
+      switch (msg.event) {
+        case "connected": {
+          console.log(`[TWILIO EVENT] Handshake protocol connected.`);
+          break;
+        }
+
+        case "start": {
+          session.streamSid = msg.streamSid || msg.start?.streamSid;
+          session.callSid = msg.start?.callSid;
+          console.log(`[TWILIO EVENT] Call stream started! StreamSid: ${session.streamSid}, CallSid: ${session.callSid}`);
+
+          // Automatic Spoken Greeting as soon as caller's phone line connects!
+          const greetingText = "Hello! Thank you for calling. I am your AI assistant. How can I help you today?";
+          console.log(`[TWILIO GREETING] Speaking greeting to caller...`);
+
+          session.abortController = new AbortController();
+          await streamSentenceToTwilio(ws, session, greetingText, session.abortController.signal);
+          session.history.push({ role: "assistant", content: greetingText });
+          break;
+        }
+
+        case "media": {
+          if (!msg.media?.payload) return;
+          const chunk = Buffer.from(msg.media.payload, "base64");
+          const rms = calculateRms(chunk);
+          const SPEECH_RMS_THRESHOLD = 600; // Human speech threshold on 16-bit linear PCM
+
+          if (rms >= SPEECH_RMS_THRESHOLD) {
+            // Caller is speaking!
+            // If AI is currently speaking or synthesizing, trigger live Phone Barge-In!
+            if (session.isAiSpeaking || (session.abortController && !session.abortController.signal.aborted)) {
+              console.log(`[TWILIO BARGE-IN] Caller interrupted AI! Sending 'clear' event to Twilio.`);
+              if (session.abortController) {
+                session.abortController.abort();
+              }
+              session.isAiSpeaking = false;
+
+              // Instruct Twilio to clear caller earpiece audio queue immediately!
+              if (ws.readyState === WebSocket.OPEN && session.streamSid) {
+                ws.send(
+                  JSON.stringify({
+                    event: "clear",
+                    streamSid: session.streamSid
+                  })
+                );
+              }
+            }
+
+            session.isSpeaking = true;
+            session.silenceChunks = 0;
+            session.speechChunksCount++;
+            session.callerAudioChunks.push(chunk);
+          } else {
+            // Silence / background line noise
+            if (session.isSpeaking) {
+              session.silenceChunks++;
+              session.callerAudioChunks.push(chunk);
+
+              // 35 chunks * 20ms = ~700ms pause -> caller finished sentence
+              if (session.silenceChunks >= 35) {
+                session.isSpeaking = false;
+                const totalSpeech = Buffer.concat(session.callerAudioChunks);
+                session.callerAudioChunks = [];
+
+                // Require at least 400ms (3200 bytes) of speech to ignore brief line clicks
+                if (totalSpeech.length >= 3200 && session.speechChunksCount >= 8) {
+                  session.speechChunksCount = 0;
+                  await handleTwilioCallerUtterance(ws, session, totalSpeech);
+                } else {
+                  session.speechChunksCount = 0;
+                }
+              }
+            }
+          }
+          break;
+        }
+
+        case "mark": {
+          // Playback mark completed on Twilio side
+          break;
+        }
+
+        case "stop": {
+          console.log(`[TWILIO EVENT] Call finished / stream stopped. StreamSid: ${session.streamSid}`);
+          if (session.abortController) {
+            session.abortController.abort();
+          }
+          break;
+        }
+
+        default:
+          break;
+      }
+    } catch (err) {
+      console.error("[TWILIO MESSAGE ERROR]", err);
+    }
+  });
+
+  ws.on("close", () => {
+    if (session.abortController) {
+      session.abortController.abort();
+    }
+    console.log(`📞 [TWILIO WS DISCONNECTED] Call ended for stream: ${session.streamSid || session.id}`);
+  });
+
+  ws.on("error", (err) => {
+    console.error(`[TWILIO WS ERROR] ${session.id}:`, err.message);
+  });
+});
+
+// ==============================================
+// 9. Stage 4: Twilio Telephony Routes & Endpoints
+// ==============================================
+
+// Inbound Call TwiML Webhook (Twilio calls this when someone dials your phone number)
+app.all(["/twilio/incoming", "/twilio/voice"], (req, res) => {
+  const env = getEnv();
+  let host = req.headers.host || `localhost:${PORT}`;
+  if (env.PUBLIC_URL) {
+    try {
+      host = new URL(env.PUBLIC_URL).host;
+    } catch (uErr) {
+      // Ignore URL parse error
+    }
+  }
+
+  const wsUrl = `wss://${host}/twilio/media-stream`;
+  const callerNumber = req.body?.From || req.query?.From || "Unknown Caller";
+  console.log(`\n📞 [TWILIO CALL INCOMING] From: ${callerNumber}`);
+  console.log(`📞 [TWILIO CALL INCOMING] Routing to Media Stream: ${wsUrl}`);
+
+  const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <Stream url="${wsUrl}">
+      <Parameter name="callerNumber" value="${callerNumber}" />
+    </Stream>
+  </Connect>
+</Response>`;
+
+  res.type("text/xml");
+  res.send(twiml);
+});
+
+// Twilio Telephony Status & Diagnostics Endpoint
+app.get("/api/twilio/status", (req, res) => {
+  const env = getEnv();
+  const hasAccountSid = Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_ACCOUNT_SID.startsWith("AC"));
+  const hasAuthToken = Boolean(env.TWILIO_AUTH_TOKEN && env.TWILIO_AUTH_TOKEN.length >= 16);
+  const hasPhoneNumber = Boolean(env.TWILIO_PHONE_NUMBER && env.TWILIO_PHONE_NUMBER.length >= 6);
+  const isFullyConfigured = hasAccountSid && hasAuthToken && hasPhoneNumber;
+
+  const publicBase = (env.PUBLIC_URL || `http://${req.headers.host || `localhost:${PORT}`}`).replace(/\/$/, "");
+  const incomingWebhook = `${publicBase}/twilio/incoming`;
+  const streamUrl = `${publicBase.replace(/^http/, "ws")}/twilio/media-stream`;
+
+  res.json({
+    status: isFullyConfigured ? "configured" : "ready_for_setup",
+    isConfigured: isFullyConfigured,
+    twilio: {
+      accountSidSet: hasAccountSid,
+      authTokenSet: hasAuthToken,
+      phoneNumberSet: hasPhoneNumber,
+      phoneNumber: env.TWILIO_PHONE_NUMBER || "Not set in .env",
+      clientReady: Boolean(twilioClient)
+    },
+    webhooks: {
+      incomingVoiceUrl: incomingWebhook,
+      mediaStreamWsUrl: streamUrl,
+      publicTunnelUrl: env.PUBLIC_URL || null
+    },
+    howToConnect: {
+      step1: "Run 'ngrok http 3000' in PowerShell to get your free public URL.",
+      step2: `Set PUBLIC_URL in your .env file or copy the ngrok URL.`,
+      step3: `Open Twilio Console -> Phone Numbers -> Active Numbers -> Configure.`,
+      step4: `Under 'A CALL COMES IN', select 'Webhook' (HTTP POST) and paste: ${incomingWebhook}`,
+      step5: "Call your Twilio number from your cellphone and the AI will answer!"
+    }
+  });
+});
+
+// Outbound Phone Call API (Calls any phone number and connects them to our AI Voice Agent)
+app.post("/api/twilio/call", async (req, res) => {
+  try {
+    const env = getEnv();
+    const { to } = req.body;
+
+    if (!to) {
+      return res.status(400).json({ error: "Missing required parameter 'to' (phone number to call)." });
+    }
+
+    if (!twilioClient || !env.TWILIO_PHONE_NUMBER) {
+      return res.status(400).json({
+        error: "Twilio credentials are not fully configured in .env.",
+        missing: {
+          accountSid: !env.TWILIO_ACCOUNT_SID,
+          authToken: !env.TWILIO_AUTH_TOKEN,
+          phoneNumber: !env.TWILIO_PHONE_NUMBER
+        }
+      });
+    }
+
+    const publicBase = (env.PUBLIC_URL || `http://${req.headers.host || `localhost:${PORT}`}`).replace(/\/$/, "");
+    const twimlUrl = `${publicBase}/twilio/incoming`;
+
+    console.log(`[TWILIO OUTBOUND] Calling ${to} from ${env.TWILIO_PHONE_NUMBER}...`);
+    const call = await twilioClient.calls.create({
+      to: to,
+      from: env.TWILIO_PHONE_NUMBER,
+      url: twimlUrl
+    });
+
+    console.log(`[TWILIO OUTBOUND SUCCESS] Call SID: ${call.sid}`);
+    res.json({
+      success: true,
+      callSid: call.sid,
+      to: to,
+      from: env.TWILIO_PHONE_NUMBER,
+      status: call.status
+    });
+  } catch (error) {
+    console.error("[TWILIO OUTBOUND ERROR]", error);
+    res.status(500).json({
+      error: "Failed to initiate outbound call.",
+      details: error.message
+    });
+  }
+});
+
+// Interactive Phone Call Simulator Endpoint
+app.post("/api/twilio/simulate-call", async (req, res) => {
+  try {
+    const { userMessage } = req.body;
+    const testMessage = userMessage || "Hello! Can you tell me what you can do?";
+    const env = getEnv();
+
+    console.log(`[TWILIO SIMULATOR] Simulating phone call with caller message: "${testMessage}"`);
+
+    // 1. Spoken Greeting
+    const greetingText = "Hello! Thank you for calling. I am your AI assistant. How can I help you today?";
+    let greetingAudioBase64 = null;
+    if (env.ELEVENLABS_API_KEY && env.ELEVENLABS_API_KEY.startsWith("sk_")) {
+      try {
+        const mulawAudio = await synthesizeElevenLabs(greetingText, env.DEFAULT_ELEVENLABS_VOICE, null, 1, "ulaw_8000");
+        greetingAudioBase64 = mulawAudio.toString("base64");
+      } catch (e) {
+        console.warn("[TWILIO SIMULATOR] Greeting TTS warning:", e.message);
+      }
+    }
+
+    // 2. LLM Brain Response
+    let aiReply = "Hello! I am your AI voice agent running over a simulated Twilio telephone media stream with sub-second latency.";
+    if (groq) {
+      const completion = await groq.chat.completions.create({
+        model: env.GROQ_MODEL,
+        messages: [
+          {
+            role: "system",
+            content: "You are a friendly, concise AI voice assistant speaking on an active telephone call. Keep answers natural, clear, and brief (1 to 2 sentences)."
+          },
+          {
+            role: "user",
+            content: testMessage
+          }
+        ],
+        max_tokens: 300,
+        temperature: 0.7,
+        ...(env.GROQ_MODEL.includes("gpt-oss") ? { reasoning_effort: "low" } : {})
+      });
+      aiReply = completion.choices[0]?.message?.content || aiReply;
+    }
+
+    // 3. Synthesize reply in μ-law 8kHz format
+    let replyAudioBase64 = null;
+    if (env.ELEVENLABS_API_KEY && env.ELEVENLABS_API_KEY.startsWith("sk_")) {
+      try {
+        const mulawAudio = await synthesizeElevenLabs(aiReply, env.DEFAULT_ELEVENLABS_VOICE, null, 1, "ulaw_8000");
+        replyAudioBase64 = mulawAudio.toString("base64");
+      } catch (e) {
+        console.warn("[TWILIO SIMULATOR] Reply TTS warning:", e.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      simulation: "Twilio Media Streams Telephony Call",
+      protocol: "G.711 μ-law (8000Hz mono)",
+      stages: {
+        connection: "Handshake verified over /twilio/media-stream",
+        greeting: {
+          text: greetingText,
+          hasMulawAudio: Boolean(greetingAudioBase64),
+          audioBase64: greetingAudioBase64
+        },
+        callerUtterance: testMessage,
+        brainReply: {
+          text: aiReply,
+          hasMulawAudio: Boolean(replyAudioBase64),
+          audioBase64: replyAudioBase64
+        },
+        bargeInSupported: true
+      }
+    });
+  } catch (error) {
+    console.error("[TWILIO SIMULATOR ERROR]", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Start the server (HTTP + WebSocket on same port)
 server.listen(PORT, () => {
   console.log(`\n======================================================`);
   console.log(`🚀 AI Voice Agent Backend is live on http://localhost:${PORT}`);
-  console.log(`⚡ WebSocket Stream: ws://localhost:${PORT}/ws/voice (Stage 3)`);
-  console.log(`📡 Health Check : GET  http://localhost:${PORT}/api/health`);
-  console.log(`🎭 Voices List  : GET  http://localhost:${PORT}/api/voices`);
-  console.log(`💬 Text Chat    : POST http://localhost:${PORT}/chat`);
-  console.log(`👂 Ears (STT)   : POST http://localhost:${PORT}/transcribe`);
-  console.log(`👄 Mouth (TTS)  : POST http://localhost:${PORT}/tts`);
-  console.log(`⚡ Voice Loop   : POST http://localhost:${PORT}/voice-chat`);
+  console.log(`⚡ Browser Stream : ws://localhost:${PORT}/ws/voice (Stage 3)`);
+  console.log(`📞 Twilio Stream  : ws://localhost:${PORT}/twilio/media-stream (Stage 4)`);
+  console.log(`📞 Twilio Webhook : POST http://localhost:${PORT}/twilio/incoming (Stage 4)`);
+  console.log(`📡 Health Check   : GET  http://localhost:${PORT}/api/health`);
+  console.log(`📡 Twilio Status  : GET  http://localhost:${PORT}/api/twilio/status`);
+  console.log(`🎭 Voices List    : GET  http://localhost:${PORT}/api/voices`);
+  console.log(`💬 Text Chat      : POST http://localhost:${PORT}/chat`);
+  console.log(`👂 Ears (STT)     : POST http://localhost:${PORT}/transcribe`);
+  console.log(`👄 Mouth (TTS)    : POST http://localhost:${PORT}/tts`);
+  console.log(`⚡ Voice Loop     : POST http://localhost:${PORT}/voice-chat`);
   const env = getEnv();
   console.log(`------------------------------------------------------`);
-  console.log(`🧠 Brain (LLM)  : ${groq ? "✅ Groq (" + env.GROQ_MODEL + ") [Streaming Ready]" : "⚠️  Simulation Mode"}`);
-  console.log(`👂 Ears (STT)   : ${groq ? "✅ Groq Whisper Turbo" : "⚠️  Simulation"}${env.DEEPGRAM_API_KEY ? " + Deepgram" : ""}`);
-  console.log(`👄 Mouth (TTS)  : ${env.ELEVENLABS_API_KEY ? (env.ELEVENLABS_API_KEY.startsWith("sk_") ? "✅ ElevenLabs Active (Flash v2.5 Pipelined)" : "⚠️  Invalid Key (Key ID entered instead of sk_...)") : "ℹ️  Browser Speech Fallback"}`);
-  console.log(`⚡ Latency Goal : <500ms Time-to-First-Audio (TTFA) + Live Barge-in`);
+  console.log(`🧠 Brain (LLM)    : ${groq ? "✅ Groq (" + env.GROQ_MODEL + ") [Streaming Ready]" : "⚠️  Simulation Mode"}`);
+  console.log(`👂 Ears (STT)     : ${groq ? "✅ Groq Whisper Turbo" : "⚠️  Simulation"}${env.DEEPGRAM_API_KEY ? " + Deepgram" : ""}`);
+  console.log(`👄 Mouth (TTS)    : ${env.ELEVENLABS_API_KEY ? (env.ELEVENLABS_API_KEY.startsWith("sk_") ? "✅ ElevenLabs Active (Flash v2.5 Pipelined + Telephony μ-law)" : "⚠️  Invalid Key (Key ID entered instead of sk_...)") : "ℹ️  Browser Speech Fallback"}`);
+  console.log(`📞 Phone (Twilio) : ${Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER) ? "✅ Active (" + env.TWILIO_PHONE_NUMBER + ")" : "ℹ️  Simulator Ready (Add TWILIO_* to .env to connect real number)"}`);
+  console.log(`⚡ Latency Goal   : <500ms Time-to-First-Audio (TTFA) + Live Telephone Barge-in`);
   console.log(`======================================================\n`);
 });
 
