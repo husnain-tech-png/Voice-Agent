@@ -425,3 +425,34 @@ This runs an automated end-to-end test verifying:
 3. **Multi-Turn Session Memory & Call History:**
    - Persistent call logs, transcripts, and duration meters saved to disk.
 
+---
+
+## 📞 Today's Investigation: 8-Second Missed Call AI Answering Assistant
+
+### 1. Do You Need Money to Connect It to Your Mobile Phone?
+**YES.** Here is the simple reason why:
+* When someone calls your personal mobile number (SIM card) and you do not answer within 8–10 seconds, your cellular network (Jazz, Zong, Telenor, Ufone, etc.) uses a telecom feature called **Conditional Call Forwarding on No Reply (CFNR)**.
+* Your cellular provider **can only forward a call to another real phone number** — it cannot route a telephone call to an internet website URL or your laptop directly.
+* Real phone numbers are regulated telecom assets rented from companies like **Twilio** or **Telnyx** for about **$1.15 to $2.00 per month**.
+* Inbound calls cost about **$0.01 per minute**.
+* When your mobile SIM forwards a call to an international number (+1 US), your mobile network charges standard call forwarding airtime.
+
+### 2. How Much Money is Needed?
+* You only need about **$3 to $5 total** to get started. That covers a virtual phone number and hundreds of minutes of testing calls.
+
+### 3. Step-by-Step Guide (With $3–$5):
+1. **Get a Virtual Phone Number**: Sign up on [Telnyx](https://telnyx.com) or [Twilio](https://twilio.com), add $3–$5 credit, and buy a US or local phone number ($1.15/month).
+2. **Configure Webhook**: Put your server's public URL into the Voice Webhook setting:
+   `https://<your-domain>/twilio/incoming`
+3. **Add Keys to `.env`**: Put your `ACCOUNT_SID`, `AUTH_TOKEN`, and `PHONE_NUMBER` into [`.env`](file:///c:/voice%20agenty/.env).
+4. **Set Up Call Forwarding on Your Phone**:
+   - Open your phone's dialer and type: `*61*<YourVirtualNumber>**10#` and press Call.
+   - (10 seconds is ~2-3 rings; GSM networks support 5s, 10s, 15s, 20s).
+5. **Done!** Whenever anyone calls your cell phone and you don't pick up within 10 seconds, the call automatically redirects to your AI server, and Bella answers!
+
+### 4. What If You Want a 100% Free Solution ($0.00)?
+If you don't want to spend any money:
+* **Option A (Web Studio - Live Now):** Open the public tunnel link on your smartphone's browser, tap the mic, and talk to Bella with sub-500ms voice.
+* **Option B (WhatsApp Voice Bot):** We can connect an open-source WhatsApp listener (`@whiskeysockets/baileys`) to your existing WhatsApp number. People can send voice notes or call on WhatsApp, and your AI will reply with voice notes for $0.00!
+
+

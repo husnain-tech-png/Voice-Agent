@@ -262,3 +262,21 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 - [ ] **Multi-Turn Session Memory & Call Analytics**:
   - Storing call transcripts, caller sentiment, and duration logs.
 
+---
+
+## 📞 Missed-Call AI Assistant & Telephony Feasibility Guide
+
+### How 8-10s Missed-Call Forwarding Works
+1. **Mechanism**: Uses GSM standard **Conditional Call Forwarding on No Reply (CFNR)** via MMI code `*61*<Number>**10#`.
+2. **Why Telecom Services Require Payment**:
+   - Mobile carriers cannot forward calls to IP addresses or websites; they can only forward to another telephone number (DID).
+   - Virtual phone numbers (Twilio/Telnyx) are regulated telecom assets rented for ~$1.15/month.
+   - Inbound call streaming costs ~$0.0085 to $0.014/minute.
+   - Mobile carriers (e.g. Pakistani SIMs) bill standard call forwarding airtime when diverting calls.
+3. **Total Minimum Budget Needed**:
+   - ~$3 to $5 one-time top-up on Twilio or Telnyx is sufficient for a phone number and hundreds of test minutes.
+4. **100% Free Zero-Cost Alternatives**:
+   - **Browser Web Studio**: Real-time voice stream over WebSockets (<500ms TTFA) via public tunnel.
+   - **WhatsApp Voice Bot**: Connects to existing WhatsApp number via `@whiskeysockets/baileys` with $0 carrier fees.
+
+
