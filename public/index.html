@@ -1055,6 +1055,33 @@
 
   <!-- Stage 5: Mobile Setup & Call Forwarding Studio -->
   <div id="mobileStudio" class="mobile-studio" style="display: none;">
+    <!-- 0. Telnyx Telephony & TeXML Integration Card -->
+    <div class="phone-card" style="border-color: rgba(56, 189, 248, 0.35); background: rgba(15, 23, 42, 0.88);">
+      <div class="phone-card-title">
+        <span>🌐 Telnyx Telephony &amp; TeXML</span>
+        <span class="badge badge-green" id="telnyxStatusBadge">Key Active</span>
+      </div>
+      <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 10px;">
+        Telnyx connects your phone line directly to our AI agent. TeXML Application is configured and ready.
+      </p>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; font-size: 0.8rem;">
+        <div style="padding: 8px; background: rgba(30, 41, 59, 0.6); border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+          <div style="color: #94a3b8; font-size: 0.72rem;">Available Credit</div>
+          <div style="color: #34d399; font-weight: 700; font-size: 1.05rem;" id="telnyxBalanceVal">$5.00</div>
+        </div>
+        <div style="padding: 8px; background: rgba(30, 41, 59, 0.6); border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+          <div style="color: #94a3b8; font-size: 0.72rem;">TeXML App ID</div>
+          <div style="color: #c084fc; font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 0.76rem;" id="telnyxAppIdVal">3055170547735332106</div>
+        </div>
+      </div>
+      <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; font-weight: 600;">Telnyx Phone Number:</div>
+      <div class="fwd-code-box" style="margin-bottom: 8px;">
+        <span id="telnyxActiveNumber" style="color: #38bdf8; font-weight: 700;">Loading...</span>
+        <button type="button" class="btn-action-small" id="syncTelnyxBtn" title="Sync purchased number from Telnyx">🔄 Sync Number</button>
+      </div>
+      <div id="telnyxSyncMessage" style="font-size: 0.76rem; display: none; padding: 6px 10px; border-radius: 6px; margin-top: 6px;"></div>
+    </div>
+
     <!-- 1. Call Forwarding Setup Wizard -->
     <div class="phone-card">
       <div class="phone-card-title">
@@ -2224,6 +2251,63 @@
 
     refreshHistoryBtn.addEventListener('click', loadCallHistory);
 
+    // Load Telnyx Status
+    async function loadTelnyxStatus() {
+      try {
+        const res = await fetch('/api/telnyx/status');
+        const data = await res.json();
+        if (data.configured) {
+          telnyxBalanceVal.textContent = `$${data.balance}`;
+          if (data.phoneNumber) {
+            telnyxActiveNumber.textContent = data.phoneNumber;
+            telnyxStatusBadge.textContent = 'Ready for Calls';
+            telnyxStatusBadge.className = 'badge badge-green';
+            fwdTwilioNumber.textContent = `${data.phoneNumber} (Telnyx)`;
+          } else {
+            telnyxActiveNumber.innerHTML = '<span style="color: #fde047;">No number bought yet</span> <a href="https://portal.telnyx.com/#/app/numbers/search-numbers" target="_blank" style="color: #38bdf8; text-decoration: underline; margin-left: 6px;">Buy in Portal ($1)</a>';
+            telnyxStatusBadge.textContent = 'Needs Number';
+            telnyxStatusBadge.className = 'badge badge-yellow';
+          }
+        }
+      } catch (e) {
+        console.warn('Telnyx status fetch warning:', e);
+      }
+    }
+
+    // Sync Telnyx Number Button Handler
+    syncTelnyxBtn.addEventListener('click', async () => {
+      syncTelnyxBtn.disabled = true;
+      syncTelnyxBtn.textContent = '⏳ Syncing...';
+      telnyxSyncMessage.style.display = 'block';
+      telnyxSyncMessage.style.background = 'rgba(56, 189, 248, 0.1)';
+      telnyxSyncMessage.style.color = '#38bdf8';
+      telnyxSyncMessage.textContent = 'Checking Telnyx account for phone numbers...';
+
+      try {
+        const res = await fetch('/api/telnyx/sync', { method: 'POST' });
+        const data = await res.json();
+
+        if (data.synced) {
+          telnyxSyncMessage.style.background = 'rgba(52, 211, 153, 0.1)';
+          telnyxSyncMessage.style.color = '#34d399';
+          telnyxSyncMessage.innerHTML = `✅ ${data.message}`;
+          await loadTelnyxStatus();
+          await loadForwardingSetup();
+        } else {
+          telnyxSyncMessage.style.background = 'rgba(245, 158, 11, 0.1)';
+          telnyxSyncMessage.style.color = '#fde047';
+          telnyxSyncMessage.innerHTML = `ℹ️ ${data.message} <a href="${data.portalUrl}" target="_blank" style="color: #38bdf8; text-decoration: underline; display: block; margin-top: 4px;">👉 Click here to buy a number on Telnyx ($1.00)</a>`;
+        }
+      } catch (err) {
+        telnyxSyncMessage.style.background = 'rgba(239, 68, 68, 0.1)';
+        telnyxSyncMessage.style.color = '#f87171';
+        telnyxSyncMessage.textContent = '❌ ' + err.message;
+      } finally {
+        syncTelnyxBtn.disabled = false;
+        syncTelnyxBtn.textContent = '🔄 Sync Number';
+      }
+    });
+
     // Initial Health and Status Check
     async function initAgent() {
       try {
@@ -2303,8 +2387,9 @@
           callCounterBadge.textContent = `📞 ${healthRes.stage5.callHistoryCount} calls`;
         }
 
-        // Load forwarding codes
+        // Load forwarding codes & Telnyx status
         loadForwardingSetup();
+        loadTelnyxStatus();
 
       } catch (e) {
         console.warn('Backend init check warning:', e);

@@ -9,6 +9,7 @@ import twilio from "twilio";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { startAutoTunnel } from "./tunnel.js";
 
 // ES Module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -35,6 +36,9 @@ function getEnv() {
   const twilioAccountSid = (process.env.TWILIO_ACCOUNT_SID || "").trim();
   const twilioAuthToken = (process.env.TWILIO_AUTH_TOKEN || "").trim();
   const twilioPhoneNumber = (process.env.TWILIO_PHONE_NUMBER || "").trim();
+  const telnyxApiKey = (process.env.TELNYX_API_KEY || "").trim();
+  const telnyxPhoneNumber = (process.env.TELNYX_PHONE_NUMBER || "").trim();
+  const telnyxTexmlAppId = (process.env.TELNYX_TEXML_APP_ID || "").trim();
   const publicUrl = (process.env.PUBLIC_URL || "").trim();
 
   // Sync Groq client whenever key is updated
@@ -70,6 +74,9 @@ function getEnv() {
     TWILIO_ACCOUNT_SID: twilioAccountSid,
     TWILIO_AUTH_TOKEN: twilioAuthToken,
     TWILIO_PHONE_NUMBER: twilioPhoneNumber,
+    TELNYX_API_KEY: telnyxApiKey,
+    TELNYX_PHONE_NUMBER: telnyxPhoneNumber,
+    TELNYX_TEXML_APP_ID: telnyxTexmlAppId,
     PUBLIC_URL: publicUrl,
     PERSONAL_PHONE_NUMBER: personalPhoneNumber
   };
@@ -158,12 +165,12 @@ async function generateCallSummary(transcript, callerNumber) {
   }
 }
 
-// Send call summary SMS to your personal phone via Twilio
+// Send call summary SMS to your personal phone via Telnyx or Twilio
 async function sendCallSummarySms(summary, callerNumber, durationSeconds) {
   const env = getEnv();
-  if (!twilioClient || !env.PERSONAL_PHONE_NUMBER || !env.TWILIO_PHONE_NUMBER) {
-    console.log(`[STAGE 5 SMS] Skipped — Twilio credentials or personal number not configured.`);
-    return { sent: false, reason: "Twilio or personal number not configured" };
+  if (!env.PERSONAL_PHONE_NUMBER) {
+    console.log(`[STAGE 5 SMS] Skipped — PERSONAL_PHONE_NUMBER not configured.`);
+    return { sent: false, reason: "Personal number not configured" };
   }
 
   const durationStr = durationSeconds >= 60
@@ -183,18 +190,51 @@ async function sendCallSummarySms(summary, callerNumber, durationSeconds) {
     `Duration: ${durationStr}\n\n` +
     `${summary}`;
 
-  try {
-    const message = await twilioClient.messages.create({
-      to: env.PERSONAL_PHONE_NUMBER,
-      from: env.TWILIO_PHONE_NUMBER,
-      body: smsBody.substring(0, 1600) // SMS limit
-    });
-    console.log(`[STAGE 5 SMS SENT] SID: ${message.sid} to ${env.PERSONAL_PHONE_NUMBER}`);
-    return { sent: true, messageSid: message.sid };
-  } catch (smsErr) {
-    console.error(`[STAGE 5 SMS ERROR]`, smsErr.message);
-    return { sent: false, reason: smsErr.message };
+  // 1. Try Telnyx SMS if configured
+  if (env.TELNYX_API_KEY && env.TELNYX_PHONE_NUMBER) {
+    try {
+      const telnyxRes = await fetch("https://api.telnyx.com/v2/messages", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + env.TELNYX_API_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          from: env.TELNYX_PHONE_NUMBER,
+          to: env.PERSONAL_PHONE_NUMBER,
+          text: smsBody.substring(0, 1600)
+        })
+      });
+      const telnyxData = await telnyxRes.json();
+      if (telnyxRes.ok) {
+        console.log(`[STAGE 5 TELNYX SMS SENT] ID: ${telnyxData.data?.id} to ${env.PERSONAL_PHONE_NUMBER}`);
+        return { sent: true, provider: "telnyx", messageId: telnyxData.data?.id };
+      } else {
+        console.warn(`[STAGE 5 TELNYX SMS WARNING]`, telnyxData.errors?.[0]?.detail || "Telnyx SMS failed");
+      }
+    } catch (tErr) {
+      console.error(`[STAGE 5 TELNYX SMS ERROR]`, tErr.message);
+    }
   }
+
+  // 2. Try Twilio SMS if configured
+  if (twilioClient && env.TWILIO_PHONE_NUMBER) {
+    try {
+      const message = await twilioClient.messages.create({
+        to: env.PERSONAL_PHONE_NUMBER,
+        from: env.TWILIO_PHONE_NUMBER,
+        body: smsBody.substring(0, 1600)
+      });
+      console.log(`[STAGE 5 TWILIO SMS SENT] SID: ${message.sid} to ${env.PERSONAL_PHONE_NUMBER}`);
+      return { sent: true, provider: "twilio", messageSid: message.sid };
+    } catch (smsErr) {
+      console.error(`[STAGE 5 TWILIO SMS ERROR]`, smsErr.message);
+      return { sent: false, reason: smsErr.message };
+    }
+  }
+
+  console.log(`[STAGE 5 SMS] Skipped — Neither Telnyx nor Twilio phone credentials configured.`);
+  return { sent: false, reason: "No active SMS provider configured with a phone number" };
 }
 
 // Process end-of-call: generate summary, save to history, send SMS
@@ -568,13 +608,20 @@ app.get("/api/health", (req, res) => {
     stage5: {
       mobileCallForwarding: true,
       postCallSummary: true,
-      smsDelivery: Boolean(twilioClient && env.PERSONAL_PHONE_NUMBER),
+      smsDelivery: Boolean((env.TELNYX_API_KEY && env.TELNYX_PHONE_NUMBER) || (twilioClient && env.TWILIO_PHONE_NUMBER)),
       personalPhoneConfigured: Boolean(env.PERSONAL_PHONE_NUMBER),
       personalPhone: env.PERSONAL_PHONE_NUMBER ? env.PERSONAL_PHONE_NUMBER.replace(/.(?=.{4})/g, "*") : "Not configured",
       callHistoryCount: callHistory.length,
       callHistoryFile: "call-history.json",
       forwardingSetupEndpoint: "/api/forwarding/setup",
       callHistoryEndpoint: "/api/calls/history"
+    },
+    telnyx: {
+      active: Boolean(env.TELNYX_API_KEY),
+      phoneNumber: env.TELNYX_PHONE_NUMBER || "Not set",
+      texmlAppId: env.TELNYX_TEXML_APP_ID || "Not set",
+      incomingWebhook: "/telnyx/incoming",
+      mediaStreamWs: "/telnyx/media-stream"
     },
     services: {
       llm: {
@@ -915,7 +962,7 @@ server.on("upgrade", (request, socket, head) => {
       browserWss.handleUpgrade(request, socket, head, (ws) => {
         browserWss.emit("connection", ws, request);
       });
-    } else if (pathname === "/twilio/media-stream") {
+    } else if (pathname === "/twilio/media-stream" || pathname === "/telnyx/media-stream") {
       twilioWss.handleUpgrade(request, socket, head, (ws) => {
         twilioWss.emit("connection", ws, request);
       });
@@ -1475,6 +1522,7 @@ async function streamSentenceToTwilio(ws, session, sentence, signal) {
         JSON.stringify({
           event: "media",
           streamSid: session.streamSid,
+          stream_id: session.streamSid,
           media: {
             payload: packet.toString("base64")
           }
@@ -1482,12 +1530,13 @@ async function streamSentenceToTwilio(ws, session, sentence, signal) {
       );
     }
 
-    // Send mark event so we know when Twilio finishes playback of this sentence
+    // Send mark event so we know when Twilio/Telnyx finishes playback of this sentence
     if (!signal.aborted) {
       ws.send(
         JSON.stringify({
           event: "mark",
           streamSid: session.streamSid,
+          stream_id: session.streamSid,
           mark: {
             name: `chunk_${session.chunkCounter++}`
           }
@@ -1660,19 +1709,19 @@ twilioWss.on("connection", (ws, req) => {
         }
 
         case "start": {
-          session.streamSid = msg.streamSid || msg.start?.streamSid;
-          session.callSid = msg.start?.callSid;
+          session.streamSid = msg.streamSid || msg.stream_id || msg.start?.streamSid || msg.start?.stream_id;
+          session.callSid = msg.start?.callSid || msg.start?.call_control_id || msg.start?.call_leg_id;
 
-          // Stage 5: Extract caller metadata from stream parameters
-          const customParams = msg.start?.customParameters || {};
-          session.callerNumber = customParams.callerNumber || "Unknown";
-          session.forwardedFrom = customParams.forwardedFrom || null;
-          session.callerName = customParams.callerName || null;
+          // Stage 5: Extract caller metadata from stream parameters (Twilio & Telnyx format)
+          const customParams = msg.start?.customParameters || msg.start?.custom_parameters || {};
+          session.callerNumber = customParams.callerNumber || customParams.caller_number || "Unknown";
+          session.forwardedFrom = customParams.forwardedFrom || customParams.forwarded_from || null;
+          session.callerName = customParams.callerName || customParams.caller_name || null;
           session.callStartTime = new Date().toISOString();
           if (customParams.callSid) session.callSid = customParams.callSid;
 
-          console.log(`[TWILIO EVENT] Call stream started! StreamSid: ${session.streamSid}, CallSid: ${session.callSid}`);
-          console.log(`[TWILIO EVENT] Caller: ${session.callerNumber}${session.forwardedFrom ? ` (forwarded from ${session.forwardedFrom})` : ""}`);
+          console.log(`[PHONE EVENT] Call stream started! StreamSid/ID: ${session.streamSid}, CallSid: ${session.callSid}`);
+          console.log(`[PHONE EVENT] Caller: ${session.callerNumber}${session.forwardedFrom ? ` (forwarded from ${session.forwardedFrom})` : ""}`);
 
           // Automatic Spoken Greeting as soon as caller's phone line connects!
           const greetingText = "Hello! Thank you for calling. I am your AI assistant. How can I help you today?";
@@ -1702,12 +1751,13 @@ twilioWss.on("connection", (ws, req) => {
               }
               session.isAiSpeaking = false;
 
-              // Instruct Twilio to clear caller earpiece audio queue immediately!
+              // Instruct Twilio/Telnyx to clear caller earpiece audio queue immediately!
               if (ws.readyState === WebSocket.OPEN && session.streamSid) {
                 ws.send(
                   JSON.stringify({
                     event: "clear",
-                    streamSid: session.streamSid
+                    streamSid: session.streamSid,
+                    stream_id: session.streamSid
                   })
                 );
               }
@@ -1787,8 +1837,8 @@ twilioWss.on("connection", (ws, req) => {
 // 9. Stage 4: Twilio Telephony Routes & Endpoints
 // ==============================================
 
-// Inbound Call TwiML Webhook (Twilio calls this when someone dials your phone number)
-app.all(["/twilio/incoming", "/twilio/voice"], (req, res) => {
+// Inbound Call TwiML / TeXML Webhook (Twilio & Telnyx call this when someone dials your number)
+app.all(["/twilio/incoming", "/twilio/voice", "/telnyx/incoming", "/telnyx/voice"], (req, res) => {
   const env = getEnv();
   let host = req.headers.host || `localhost:${PORT}`;
   if (env.PUBLIC_URL) {
@@ -1799,17 +1849,21 @@ app.all(["/twilio/incoming", "/twilio/voice"], (req, res) => {
     }
   }
 
-  const wsUrl = `wss://${host}/twilio/media-stream`;
-  const callerNumber = req.body?.From || req.query?.From || "Unknown Caller";
-  const calledNumber = req.body?.To || req.query?.To || "";
-  const forwardedFrom = req.body?.ForwardedFrom || req.query?.ForwardedFrom || "";
-  const callSid = req.body?.CallSid || req.query?.CallSid || "";
-  const callerName = req.body?.CallerName || req.query?.CallerName || "";
+  const isTelnyx = req.path.includes("telnyx");
+  const providerName = isTelnyx ? "TELNYX" : "TWILIO";
+  const wsPath = isTelnyx ? "/telnyx/media-stream" : "/twilio/media-stream";
+  const wsUrl = `wss://${host}${wsPath}`;
 
-  console.log(`\n📞 [TWILIO CALL INCOMING] From: ${callerNumber}${forwardedFrom ? ` (Forwarded from: ${forwardedFrom})` : ""}`);
-  console.log(`📞 [TWILIO CALL INCOMING] CallSid: ${callSid} | Routing to Media Stream: ${wsUrl}`);
+  const callerNumber = req.body?.From || req.query?.From || req.body?.from || "Unknown Caller";
+  const calledNumber = req.body?.To || req.query?.To || req.body?.to || "";
+  const forwardedFrom = req.body?.ForwardedFrom || req.query?.ForwardedFrom || req.body?.forwarded_from || "";
+  const callSid = req.body?.CallSid || req.query?.CallSid || req.body?.call_control_id || req.body?.call_leg_id || "";
+  const callerName = req.body?.CallerName || req.query?.CallerName || req.body?.caller_name || "";
 
-  const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+  console.log(`\n📞 [${providerName} CALL INCOMING] From: ${callerNumber}${forwardedFrom ? ` (Forwarded from: ${forwardedFrom})` : ""}`);
+  console.log(`📞 [${providerName} CALL INCOMING] CallSid: ${callSid} | Routing to Media Stream: ${wsUrl}`);
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
     <Stream url="${wsUrl}">
@@ -1823,7 +1877,7 @@ app.all(["/twilio/incoming", "/twilio/voice"], (req, res) => {
 </Response>`;
 
   res.type("text/xml");
-  res.send(twiml);
+  res.send(xml);
 });
 
 // Twilio Telephony Status & Diagnostics Endpoint
@@ -1998,83 +2052,86 @@ app.post("/api/twilio/simulate-call", async (req, res) => {
 // Call Forwarding Setup Guide — Returns carrier-specific GSM CFNR codes
 app.get("/api/forwarding/setup", (req, res) => {
   const env = getEnv();
-  const twilioNumber = env.TWILIO_PHONE_NUMBER || "+1XXXXXXXXXX";
+  const activeNumber = env.TELNYX_PHONE_NUMBER || env.TWILIO_PHONE_NUMBER || "+1XXXXXXXXXX";
+  const provider = env.TELNYX_PHONE_NUMBER ? "Telnyx" : (env.TWILIO_PHONE_NUMBER ? "Twilio" : "Simulator");
 
   res.json({
     status: "ready",
-    twilioNumber: twilioNumber,
+    provider: provider,
+    activeNumber: activeNumber,
+    twilioNumber: activeNumber,
     personalNumber: env.PERSONAL_PHONE_NUMBER
       ? env.PERSONAL_PHONE_NUMBER.replace(/.(?=.{4})/g, "*")
       : "Not configured in .env",
     howItWorks: {
       step1: "Your mobile carrier has a feature called Conditional Call Forwarding on No Reply (CFNR).",
-      step2: `When someone calls your personal number and you don't answer within X seconds, your carrier forwards the call to ${twilioNumber}.`,
-      step3: "Twilio receives the forwarded call and connects it to your AI Voice Agent.",
+      step2: `When someone calls your personal number and you don't answer within X seconds, your carrier forwards the call to ${activeNumber}.`,
+      step3: `${provider} receives the forwarded call and connects it to your AI Voice Agent.`,
       step4: "After the call ends, the AI generates a summary and sends it to you via SMS."
     },
     carriers: {
       universal_gsm: {
         name: "Universal GSM (Works on ALL carriers worldwide)",
-        enable: `*61*${twilioNumber}**10#`,
+        enable: `*61*${activeNumber}**10#`,
         enableDescription: "Forward unanswered calls after 10 seconds (~2 rings)",
         timerOptions: {
-          "5_seconds": `*61*${twilioNumber}**5#`,
-          "10_seconds": `*61*${twilioNumber}**10#`,
-          "15_seconds": `*61*${twilioNumber}**15#`,
-          "20_seconds": `*61*${twilioNumber}**20#`,
-          "25_seconds": `*61*${twilioNumber}**25#`,
-          "30_seconds": `*61*${twilioNumber}**30#`
+          "5_seconds": `*61*${activeNumber}**5#`,
+          "10_seconds": `*61*${activeNumber}**10#`,
+          "15_seconds": `*61*${activeNumber}**15#`,
+          "20_seconds": `*61*${activeNumber}**20#`,
+          "25_seconds": `*61*${activeNumber}**25#`,
+          "30_seconds": `*61*${activeNumber}**30#`
         },
         disable: "##61#",
         checkStatus: "*#61#"
       },
       jazz_warid: {
         name: "Jazz / Warid (Pakistan)",
-        enable: `*61*${twilioNumber}**10#`,
+        enable: `*61*${activeNumber}**10#`,
         disable: "##61#",
         note: "Standard GSM codes work on Jazz/Warid networks."
       },
       zong: {
         name: "Zong (Pakistan)",
-        enable: `*61*${twilioNumber}**10#`,
+        enable: `*61*${activeNumber}**10#`,
         disable: "##61#",
         note: "Standard GSM codes work on Zong 4G network."
       },
       telenor: {
         name: "Telenor (Pakistan)",
-        enable: `*61*${twilioNumber}**10#`,
+        enable: `*61*${activeNumber}**10#`,
         disable: "##61#",
         note: "Standard GSM codes work on Telenor network."
       },
       ufone: {
         name: "Ufone (Pakistan)",
-        enable: `*61*${twilioNumber}**10#`,
+        enable: `*61*${activeNumber}**10#`,
         disable: "##61#",
         note: "Standard GSM codes work on Ufone network."
       },
       airtel: {
         name: "Airtel (India)",
-        enable: `*61*${twilioNumber}**10#`,
+        enable: `*61*${activeNumber}**10#`,
         disable: "##61#",
         note: "Standard GSM codes work on Airtel network."
       },
       tmobile: {
         name: "T-Mobile (USA)",
-        enable: `*61*${twilioNumber}*11*10#`,
+        enable: `*61*${activeNumber}*11*10#`,
         disable: "##61#",
         note: "T-Mobile uses a slightly different format with service class *11*."
       },
       att: {
         name: "AT&T (USA)",
-        enable: `*61*${twilioNumber}*11*10#`,
+        enable: `*61*${activeNumber}*11*10#`,
         disable: "##61#",
         note: "AT&T may require contacting customer support for international forwarding."
       }
     },
     gsmTimerNote: "GSM networks only support forwarding timers in 5-second increments (5s, 10s, 15s, 20s, 25s, 30s). An exact 8-second timer is not possible. We recommend 10 seconds (~2 rings) as a good balance.",
     important: [
-      "Forwarding to an international number (e.g. US Twilio number) may incur call forwarding airtime charges from your carrier.",
-      "Make sure your Twilio number starts with a + and country code (e.g. +12345678901).",
+      `Forwarding to ${activeNumber} may incur call forwarding airtime charges from your carrier.`,
+      `Make sure the number starts with + and country code.`,
       "Open your phone's dialer app, type the enable code, and press the Call/Dial button.",
       "To check if forwarding is active, dial *#61# and press Call.",
       "To disable forwarding, dial ##61# and press Call."
@@ -2139,16 +2196,152 @@ app.post("/api/calls/test-summary-sms", async (req, res) => {
   }
 });
 
+// ==============================================
+// 11. Telnyx Telephony Status & Auto-Sync Endpoints
+// ==============================================
+
+// Telnyx Status — returns live balance, numbers, and TeXML app status
+app.get("/api/telnyx/status", async (req, res) => {
+  const env = getEnv();
+  const apiKey = env.TELNYX_API_KEY;
+  if (!apiKey) {
+    return res.json({
+      configured: false,
+      message: "TELNYX_API_KEY is not configured in .env."
+    });
+  }
+
+  try {
+    const headers = { "Authorization": "Bearer " + apiKey, "Content-Type": "application/json" };
+    let balance = "0.00";
+    try {
+      const balRes = await fetch("https://api.telnyx.com/v2/balance", { headers });
+      const balData = await balRes.json();
+      balance = balData.data?.available_credit || balData.data?.balance || "0.00";
+    } catch (e) {}
+
+    let phoneNumbers = [];
+    try {
+      const numRes = await fetch("https://api.telnyx.com/v2/phone_numbers", { headers });
+      const numData = await numRes.json();
+      phoneNumbers = (numData.data || []).map(n => ({
+        id: n.id,
+        phoneNumber: n.phone_number,
+        status: n.status,
+        connectionId: n.connection_id
+      }));
+    } catch (e) {}
+
+    const host = env.PUBLIC_URL ? new URL(env.PUBLIC_URL).host : `localhost:${PORT}`;
+
+    res.json({
+      configured: true,
+      balance: balance,
+      phoneNumber: env.TELNYX_PHONE_NUMBER || (phoneNumbers[0]?.phoneNumber || null),
+      phoneNumbers: phoneNumbers,
+      texmlAppId: env.TELNYX_TEXML_APP_ID || null,
+      incomingWebhookUrl: `${env.PUBLIC_URL || "http://" + host}/telnyx/incoming`,
+      mediaStreamWsUrl: `wss://${host}/telnyx/media-stream`,
+      readyForCalls: Boolean(env.TELNYX_PHONE_NUMBER || phoneNumbers.length > 0)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Telnyx Auto-Sync — checks for purchased numbers on Telnyx and links them to TeXML app
+app.post("/api/telnyx/sync", async (req, res) => {
+  const env = getEnv();
+  const apiKey = env.TELNYX_API_KEY;
+  if (!apiKey) {
+    return res.status(400).json({ error: "TELNYX_API_KEY is not configured in .env." });
+  }
+
+  try {
+    const headers = { "Authorization": "Bearer " + apiKey, "Content-Type": "application/json" };
+    const numRes = await fetch("https://api.telnyx.com/v2/phone_numbers", { headers });
+    const numData = await numRes.json();
+    const numbers = numData.data || [];
+    const requestedNumber = (req.body && req.body.phoneNumber) ? String(req.body.phoneNumber).trim() : null;
+
+    if (numbers.length === 0 && !requestedNumber) {
+      return res.json({
+        synced: false,
+        message: "No phone numbers found on your Telnyx account. Buy a number in Telnyx portal (portal.telnyx.com), then click Sync again!",
+        portalUrl: "https://portal.telnyx.com/#/app/numbers/search-numbers"
+      });
+    }
+
+    let primary = null;
+    if (requestedNumber) {
+      const cleanReq = requestedNumber.replace(/[^\d+]/g, "");
+      primary = numbers.find(n => n.phone_number === cleanReq || n.phone_number.replace(/[^\d]/g, "") === cleanReq.replace(/[^\d]/g, ""));
+    }
+    if (!primary && numbers.length > 0) {
+      primary = numbers[0];
+    }
+
+    const phoneNumber = primary ? primary.phone_number : requestedNumber;
+    const phoneId = primary ? primary.id : null;
+
+    // Link number to our TeXML application
+    let linked = false;
+    if (env.TELNYX_TEXML_APP_ID && primary.connection_id !== env.TELNYX_TEXML_APP_ID) {
+      try {
+        const patchRes = await fetch(`https://api.telnyx.com/v2/phone_numbers/${phoneId}`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ connection_id: env.TELNYX_TEXML_APP_ID })
+        });
+        if (patchRes.ok) linked = true;
+      } catch (patchErr) {
+        console.warn("[TELNYX SYNC] Could not link connection_id:", patchErr.message);
+      }
+    } else if (primary.connection_id === env.TELNYX_TEXML_APP_ID) {
+      linked = true;
+    }
+
+    // Save TELNYX_PHONE_NUMBER to .env
+    try {
+      const envPath = path.join(__dirname, ".env");
+      if (fs.existsSync(envPath)) {
+        let envContent = fs.readFileSync(envPath, "utf-8");
+        if (envContent.includes("TELNYX_PHONE_NUMBER=")) {
+          envContent = envContent.replace(/TELNYX_PHONE_NUMBER=.*/, `TELNYX_PHONE_NUMBER=${phoneNumber}`);
+        } else {
+          envContent += `\nTELNYX_PHONE_NUMBER=${phoneNumber}\n`;
+        }
+        fs.writeFileSync(envPath, envContent, "utf-8");
+      }
+    } catch (saveEnvErr) {}
+
+    res.json({
+      synced: true,
+      phoneNumber: phoneNumber,
+      phoneId: phoneId,
+      linkedToTeXML: linked,
+      texmlAppId: env.TELNYX_TEXML_APP_ID,
+      mmiCode: `*61*${phoneNumber}**10#`,
+      message: `Phone number ${phoneNumber} is connected to your AI Voice Agent! Dial *61*${phoneNumber}**10# on your phone to activate.`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Start the server (HTTP + WebSocket on same port)
 server.listen(PORT, () => {
   console.log(`\n======================================================`);
   console.log(`🚀 AI Voice Agent Backend is live on http://localhost:${PORT}`);
   console.log(`⚡ Browser Stream : ws://localhost:${PORT}/ws/voice (Stage 3)`);
+  console.log(`📞 Telnyx Stream  : ws://localhost:${PORT}/telnyx/media-stream (TeXML)`);
+  console.log(`📞 Telnyx Webhook : POST http://localhost:${PORT}/telnyx/incoming`);
   console.log(`📞 Twilio Stream  : ws://localhost:${PORT}/twilio/media-stream (Stage 4)`);
   console.log(`📞 Twilio Webhook : POST http://localhost:${PORT}/twilio/incoming (Stage 4)`);
   console.log(`📱 Forwarding     : GET  http://localhost:${PORT}/api/forwarding/setup (Stage 5)`);
   console.log(`📱 Call History   : GET  http://localhost:${PORT}/api/calls/history (Stage 5)`);
   console.log(`📡 Health Check   : GET  http://localhost:${PORT}/api/health`);
+  console.log(`📡 Telnyx Status  : GET  http://localhost:${PORT}/api/telnyx/status`);
   console.log(`📡 Twilio Status  : GET  http://localhost:${PORT}/api/twilio/status`);
   console.log(`🎭 Voices List    : GET  http://localhost:${PORT}/api/voices`);
   console.log(`💬 Text Chat      : POST http://localhost:${PORT}/chat`);
@@ -2160,10 +2353,14 @@ server.listen(PORT, () => {
   console.log(`🧠 Brain (LLM)    : ${groq ? "✅ Groq (" + env.GROQ_MODEL + ") [Streaming Ready]" : "⚠️  Simulation Mode"}`);
   console.log(`👂 Ears (STT)     : ${groq ? "✅ Groq Whisper Turbo" : "⚠️  Simulation"}${env.DEEPGRAM_API_KEY ? " + Deepgram" : ""}`);
   console.log(`👄 Mouth (TTS)    : ${env.ELEVENLABS_API_KEY ? (env.ELEVENLABS_API_KEY.startsWith("sk_") ? "✅ ElevenLabs Active (Flash v2.5 Pipelined + Telephony μ-law)" : "⚠️  Invalid Key (Key ID entered instead of sk_...)") : "ℹ️  Browser Speech Fallback"}`);
-  console.log(`📞 Phone (Twilio) : ${Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER) ? "✅ Active (" + env.TWILIO_PHONE_NUMBER + ")" : "ℹ️  Simulator Ready (Add TWILIO_* to .env to connect real number)"}`);
-  console.log(`📱 Call Fwd (S5)  : ${env.PERSONAL_PHONE_NUMBER ? "✅ SMS summaries → " + env.PERSONAL_PHONE_NUMBER.replace(/.(?=.{4})/g, "*") : "ℹ️  Add PERSONAL_PHONE_NUMBER to .env for SMS summaries"}`);
+  console.log(`📞 Telnyx CPaaS   : ${env.TELNYX_API_KEY ? "✅ Active Key | TeXML App: " + (env.TELNYX_TEXML_APP_ID || "Ready") + (env.TELNYX_PHONE_NUMBER ? " (" + env.TELNYX_PHONE_NUMBER + ")" : " (Buy # in portal)") : "ℹ️  Not configured"}`);
+  console.log(`📞 Twilio Telecom : ${Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER) ? "✅ Active (" + env.TWILIO_PHONE_NUMBER + ")" : "ℹ️  Simulator / TeXML Ready"}`);
+  console.log(`📱 Call Fwd (S5)  : ${env.PERSONAL_PHONE_NUMBER ? "✅ SMS summaries → " + env.PERSONAL_PHONE_NUMBER.replace(/.(?=.{4})/g, "*") : "ℹ️  Add PERSONAL_PHONE_NUMBER to .env"}`);
   console.log(`📱 Call History   : ${callHistory.length} calls recorded | call-history.json`);
   console.log(`⚡ Latency Goal   : <500ms Time-to-First-Audio (TTFA) + Live Telephone Barge-in`);
   console.log(`======================================================\n`);
+  
+  // Start self-healing public tunnel and auto-sync Telnyx TeXML cloud webhook
+  startAutoTunnel(PORT);
 });
 

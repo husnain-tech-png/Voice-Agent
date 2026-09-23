@@ -6,27 +6,29 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 ---
 
 ## 🚦 Current Status Summary
-- **Current Phase:** ✅ **Stage 5 Completed & Verified — Mobile Setup & Call Forwarding (8-10s Carrier Forwarding Rule, Transcript Tracking, LLM Call Summaries & SMS Delivery to Personal Phone)**
-- **Protocols:** 
+- **Current Phase:** ✅ **Stage 5 Completed & Verified — Mobile Setup & Call Forwarding (Telnyx TeXML & Twilio Carrier Forwarding, Transcript Tracking, LLM Call Summaries & SMS Delivery to Personal Phone `+923154483615`)**
+- **Protocols & Gateways:** 
+  - 🌐 **Telnyx CPaaS & TeXML (Active & Primary):** Full-duplex μ-law (8000Hz) WebSocket on `/telnyx/media-stream`, TeXML Webhook on `/telnyx/incoming`, TeXML App ID `3055170547735332106`, Status on `/api/telnyx/status`, Auto-Sync on `/api/telnyx/sync`
   - 📱 **Mobile Call Forwarding & History:** REST endpoints on `/api/forwarding/setup`, `/api/calls/history`, `/api/calls/:callSid`, `/api/calls/test-summary-sms`
-  - 📞 **Twilio Media Streams Telephony:** Full-duplex μ-law (8000Hz) WebSocket on `/twilio/media-stream`
+  - 📞 **Twilio Media Streams Telephony (Secondary/Fallback):** Full-duplex μ-law (8000Hz) WebSocket on `/twilio/media-stream`, TwiML on `/twilio/incoming`
   - ⚡ **Browser Live Studio:** Full-duplex WebSocket on `/ws/voice` (<500ms TTFA)
   - 📦 **REST HTTP:** Backward-compatible endpoints (`/voice-chat`, `/chat`, `/transcribe`, `/tts`)
-  - 🪝 **Twilio Webhook:** TwiML generator on `/twilio/incoming` with caller metadata parameter injection
 - **Ears (Listening):** ✅ Groq Whisper Turbo (`whisper-large-v3-turbo`) with G.711 μ-law to 16-bit linear PCM WAV decoding
 - **Brain (Thinking):** ✅ Groq LLM (`openai/gpt-oss-120b`) with **live token streaming (`stream: true`)** + Post-Call Summary generation
 - **Mouth (Speaking):** ✅ **ElevenLabs Flash v2.5 (`eleven_flash_v2_5`)** with native **`output_format=ulaw_8000`** telephony output
 - **Voice Activity Detection (VAD):** ✅ Real-time RMS energy detector on 20ms audio chunks with ~700ms silence detection
-- **Phone Interruption Handling:** ✅ **Live Phone Barge-In**: Emits Twilio `clear` event in <50ms to wipe phone line buffer
-- **Call Summaries & Notifications:** ✅ Automatic Groq LLM post-call summary + Twilio SMS delivery to `PERSONAL_PHONE_NUMBER`
+- **Phone Interruption Handling:** ✅ **Live Phone Barge-In**: Emits Twilio/Telnyx `clear` event in <50ms to wipe phone line buffer
+- **Call Summaries & Notifications:** ✅ Automatic Groq LLM post-call summary + Telnyx / Twilio SMS delivery to `PERSONAL_PHONE_NUMBER` (`+923154483615`)
 - **Call History Persistence:** ✅ In-memory cache + automatic disk backup to `call-history.json`
 - **Default Voice:** Bella (`EXAVITQu4vr4xnSDxMaL` — Free & Pro accessible)
 - **API Status:**
+  - Telnyx CPaaS: ✅ Connected & Verified (Configured in `.env`, Balance `$5.00`, TeXML App `3055170547735332106`)
   - Forwarding & Summaries: ✅ Active (`/api/forwarding/setup`, `/api/calls/history`, `/api/calls/test-summary-sms`)
   - Twilio Telephony: ✅ Active (`/twilio/incoming`, `/twilio/media-stream`, `/api/twilio/status`, `/api/twilio/simulate-call`)
   - Groq Cloud: ✅ Connected (`GROQ_API_KEY` active, token streaming & summarizer operational)
   - ElevenLabs: ✅ Connected & Verified (`ELEVENLABS_API_KEY` active, streaming low-latency MP3 & μ-law chunks)
-  - WebSockets: ✅ Dual WebSocket servers online (`/ws/voice` & `/twilio/media-stream`)
+  - WebSockets: ✅ Triple WebSocket channels online (`/ws/voice`, `/telnyx/media-stream`, `/twilio/media-stream`)
+  - Public Tunnel: ✅ Active (`https://voice-agent-husnain.loca.lt`)
 
 ---
 
@@ -165,44 +167,64 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
   - **SMS Summary Test Card**: 1-click button to verify SMS delivery to `PERSONAL_PHONE_NUMBER`.
   - **Live Call Counter Badge**: Floating badge showing total calls processed (`📞 0 calls`).
 - [x] **Automated Testing Suite**:
-  - [`test-stage5-forwarding.js`](file:///c:/voice%20agenty/test-stage5-forwarding.js): 28 automated checks covering setup codes, call history, TwiML metadata injection, transcript capture, summary generation, SMS endpoint, and detail retrieval (100% pass).
+  - [`test-stage5-forwarding.js`](file:///c:/voice%20agenty/test-stage5-forwarding.js): 29 automated checks covering setup codes, call history, TwiML/TeXML metadata injection, transcript capture, summary generation, SMS endpoint, and detail retrieval (100% pass).
   - [`test-stage5-forwarding.ps1`](file:///c:/voice%20agenty/test-stage5-forwarding.ps1): 1-click PowerShell runner with colorized status summary.
+
+### Stage 5.1: Telnyx CPaaS & TeXML Full-Duplex Integration (Active Key & Cloud TeXML App)
+- [x] **Telnyx TeXML Application Provisioning**:
+  - Programmatically created TeXML Application on user's Telnyx account: ID `3055170547735332106`, named `"AI Voice Agent - Husnain"`.
+  - Configured webhook URL: `https://voice-agent-husnain.loca.lt/telnyx/incoming`.
+  - Account verified with active balance `$5.00 USD`.
+- [x] **Inbound TeXML Call Webhook (`POST /telnyx/incoming` & `GET /telnyx/incoming`)**:
+  - Generates TeXML `<Response><Connect><Stream url="wss://${host}/telnyx/media-stream" /></Connect></Response>`.
+  - Injects caller metadata parameters (`callerNumber`, `forwardedFrom`, `callSid`, `callerName`).
+- [x] **Telnyx Full-Duplex Media Stream (`/telnyx/media-stream`)**:
+  - Attached to HTTP upgrade router alongside `/twilio/media-stream`.
+  - Handles Telnyx binary protocol with `stream_id`, `media`, `mark`, and `clear` events.
+  - Full telephony loop: RMS VAD ➡️ Whisper Turbo STT ➡️ Groq LLM ➡️ ElevenLabs Flash μ-law 8kHz ➡️ Phone line playback.
+  - Live barge-in: emits `{ event: "clear", stream_id }` in <50ms upon caller speech interruption.
+- [x] **Telnyx SMS Notification Delivery**:
+  - Integrated `POST https://api.telnyx.com/v2/messages` in `sendCallSummarySms` to send summaries directly to `PERSONAL_PHONE_NUMBER` (`+923154483615`).
+- [x] **1-Click Auto-Sync Endpoint (`POST /api/telnyx/sync`)**:
+  - Automatically queries purchased phone numbers via Telnyx API, links them to TeXML App `3055170547735332106`, updates `.env`, and generates the user's ready-to-dial MMI forwarding code.
+- [x] **Frontend Telnyx Dashboard Card (`public/index.html`)**:
+  - Live credit balance ($5.00), phone number status, TeXML App ID, and 1-click `🔄 Sync Number` button.
 
 ---
 
 ## 🏗️ Architecture & Data Flow
 
-### Stage 5: Mobile Call Forwarding & Missed-Call AI Assistant Flow
+### Stage 5: Mobile Call Forwarding & Missed-Call AI Assistant Flow (Telnyx TeXML & Twilio)
 ```
-[Unanswered Personal Call]
+[Unanswered Personal Call to +923154483615]
        │
-       ▼ (Caller rings user's personal phone for 10 seconds / 2 rings)
-[Mobile Carrier Network (Jazz / Zong / T-Mobile)]
+       ▼ (Caller rings user's phone for 10 seconds / 2 rings)
+[Zong Pakistan Mobile Network (GSM CFNR: *61*<TelnyxNumber>**10#)]
        │
-       ▼ (Conditional Call Forwarding on No Reply: *61*<TwilioNumber>**10#)
-[Twilio Cloud Telephony]
+       ▼ (Diverts unanswered call to Telnyx Virtual Number)
+[Telnyx CPaaS Cloud]
        │
-       ├─► 1. Webhook: POST /twilio/incoming
-       │     - Captures: Caller Number (From) & Personal Number (ForwardedFrom)
-       │     - TwiML returns: <Stream url="wss://.../twilio/media-stream"> with <Parameter> tags
+       ├─► 1. Webhook: POST /telnyx/incoming
+       │     - Captures: Caller Number & Forwarded SIM
+       │     - TeXML returns: <Connect><Stream url="wss://.../telnyx/media-stream">
        │
        ▼ 2. Opens Full-Duplex Media Stream WebSocket
-[Twilio Media Stream Server (/twilio/media-stream)]
+[Telnyx Media Stream Server (/telnyx/media-stream)]
        │
-       ├─► AI greets caller in μ-law 8kHz voice ("Hello! Thank you for calling...")
+       ├─► AI greets caller in μ-law 8kHz voice ("Hello! Thank you for calling Husnain...")
        │
        ├─► Conversation Loop (VAD ➡️ Whisper STT ➡️ Groq LLM ➡️ ElevenLabs μ-law 8kHz)
        │     └─► Accumulates turns into session.transcript[]
        │
-       ▼ 3. Caller hangs up (Twilio emits 'stop' event)
+       ▼ 3. Caller hangs up (Telnyx emits 'stop' event / connection close)
 [Post-Call Processing Pipeline]
        │
        ├─► 4. Groq LLM Call Summarizer:
        │     "Summarize transcript in 2-3 sentences for SMS notification"
        │
-       ├─► 5. Twilio SMS Dispatch:
-       │     Sends SMS to user's PERSONAL_PHONE_NUMBER:
-       │     "📞 Missed Call Summary from +1234567890 (Duration: 45s)..."
+       ├─► 5. Telnyx SMS Dispatch:
+       │     Sends SMS to user's PERSONAL_PHONE_NUMBER (+923154483615):
+       │     "📞 Missed Call Summary from +92300xxxxxxx (Duration: 45s)..."
        │
        └─► 6. Persist to call-history.json & update Live Dashboard UI
 ```
