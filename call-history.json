@@ -1,0 +1,20 @@
+[
+  {
+    "callSid": "CA_test_call_a5qizf",
+    "callerNumber": "Unknown",
+    "forwardedFrom": null,
+    "startTime": "2026-09-23T05:07:14.807Z",
+    "endTime": "2026-09-23T05:07:15.293Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "assistant",
+        "text": "Hello! Thank you for calling. I am your AI assistant. How can I help you today?",
+        "timestamp": 1790140035271
+      }
+    ],
+    "summary": "Caller (unknown number) called and was greeted by the AI assistant, which asked how it could help; no further request was made.",
+    "smsSent": false,
+    "smsError": "Twilio or personal number not configured"
+  }
+]

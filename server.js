@@ -6,6 +6,13 @@ import Groq, { toFile } from "groq-sdk";
 import multer from "multer";
 import { WebSocketServer, WebSocket } from "ws";
 import twilio from "twilio";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+// ES Module __dirname equivalent
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load variables from .env into process.env
 dotenv.config();
@@ -51,6 +58,8 @@ function getEnv() {
     twilioClient = null;
   }
 
+  const personalPhoneNumber = (process.env.PERSONAL_PHONE_NUMBER || "").trim();
+
   return {
     GROQ_API_KEY: groqKey,
     GROQ_MODEL: groqModel,
@@ -61,7 +70,8 @@ function getEnv() {
     TWILIO_ACCOUNT_SID: twilioAccountSid,
     TWILIO_AUTH_TOKEN: twilioAuthToken,
     TWILIO_PHONE_NUMBER: twilioPhoneNumber,
-    PUBLIC_URL: publicUrl
+    PUBLIC_URL: publicUrl,
+    PERSONAL_PHONE_NUMBER: personalPhoneNumber
   };
 }
 
@@ -79,6 +89,159 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
+
+// ==========================================================
+// Stage 5: Call History Storage & Post-Call Summary Engine
+// ==========================================================
+
+const CALL_HISTORY_FILE = path.join(__dirname, "call-history.json");
+let callHistory = [];
+
+// Load existing call history from disk on startup
+try {
+  if (fs.existsSync(CALL_HISTORY_FILE)) {
+    const raw = fs.readFileSync(CALL_HISTORY_FILE, "utf-8");
+    callHistory = JSON.parse(raw);
+    console.log(`[STAGE 5] Loaded ${callHistory.length} calls from call-history.json`);
+  }
+} catch (loadErr) {
+  console.warn(`[STAGE 5] Could not load call history:`, loadErr.message);
+  callHistory = [];
+}
+
+// Save call history to disk (keeps last 50 calls)
+function saveCallHistory() {
+  try {
+    // Keep only the last 50 calls
+    if (callHistory.length > 50) {
+      callHistory = callHistory.slice(-50);
+    }
+    fs.writeFileSync(CALL_HISTORY_FILE, JSON.stringify(callHistory, null, 2), "utf-8");
+  } catch (saveErr) {
+    console.warn(`[STAGE 5] Could not save call history:`, saveErr.message);
+  }
+}
+
+// Generate a concise post-call summary using Groq LLM
+async function generateCallSummary(transcript, callerNumber) {
+  if (!groq || !transcript || transcript.length === 0) {
+    return `Call from ${callerNumber}. No transcript available.`;
+  }
+
+  const conversationText = transcript
+    .map(t => `${t.role === "user" ? "Caller" : "AI Assistant"}: ${t.text}`)
+    .join("\n");
+
+  try {
+    const env = getEnv();
+    const completion = await groq.chat.completions.create({
+      model: env.GROQ_MODEL,
+      messages: [
+        {
+          role: "system",
+          content: "Summarize the following phone call transcript in 2-3 concise sentences. Include: who called (use their phone number), what they wanted, and the AI assistant's response. Format it as a brief SMS-friendly summary. Do NOT use markdown formatting."
+        },
+        {
+          role: "user",
+          content: `Caller's phone number: ${callerNumber}\n\nTranscript:\n${conversationText}`
+        }
+      ],
+      max_tokens: 200,
+      temperature: 0.3,
+      ...(env.GROQ_MODEL.includes("gpt-oss") ? { reasoning_effort: "low" } : {})
+    });
+
+    return (completion.choices[0]?.message?.content || "").trim() || `Call from ${callerNumber}. Summary generation failed.`;
+  } catch (err) {
+    console.error(`[STAGE 5 SUMMARY ERROR]`, err.message);
+    return `Call from ${callerNumber}. ${transcript.length} exchanges recorded. Summary generation failed.`;
+  }
+}
+
+// Send call summary SMS to your personal phone via Twilio
+async function sendCallSummarySms(summary, callerNumber, durationSeconds) {
+  const env = getEnv();
+  if (!twilioClient || !env.PERSONAL_PHONE_NUMBER || !env.TWILIO_PHONE_NUMBER) {
+    console.log(`[STAGE 5 SMS] Skipped — Twilio credentials or personal number not configured.`);
+    return { sent: false, reason: "Twilio or personal number not configured" };
+  }
+
+  const durationStr = durationSeconds >= 60
+    ? `${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s`
+    : `${durationSeconds}s`;
+
+  const timestamp = new Date().toLocaleString("en-US", {
+    timeZone: "Asia/Karachi",
+    month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
+    hour12: true
+  });
+
+  const smsBody = `📞 Missed Call Handled by AI\n` +
+    `From: ${callerNumber}\n` +
+    `Time: ${timestamp}\n` +
+    `Duration: ${durationStr}\n\n` +
+    `${summary}`;
+
+  try {
+    const message = await twilioClient.messages.create({
+      to: env.PERSONAL_PHONE_NUMBER,
+      from: env.TWILIO_PHONE_NUMBER,
+      body: smsBody.substring(0, 1600) // SMS limit
+    });
+    console.log(`[STAGE 5 SMS SENT] SID: ${message.sid} to ${env.PERSONAL_PHONE_NUMBER}`);
+    return { sent: true, messageSid: message.sid };
+  } catch (smsErr) {
+    console.error(`[STAGE 5 SMS ERROR]`, smsErr.message);
+    return { sent: false, reason: smsErr.message };
+  }
+}
+
+// Process end-of-call: generate summary, save to history, send SMS
+async function processCallEnd(session) {
+  if (session._callProcessed) return; // Prevent double processing
+  session._callProcessed = true;
+
+  const callEndTime = new Date().toISOString();
+  const callStartTime = session.callStartTime || callEndTime;
+  const durationSeconds = Math.round((new Date(callEndTime) - new Date(callStartTime)) / 1000);
+  const callerNumber = session.callerNumber || "Unknown";
+
+  console.log(`\n📱 [STAGE 5] Processing call end for ${callerNumber} (${durationSeconds}s)`);
+
+  // Generate LLM summary if there was a conversation
+  let summary = "No conversation recorded.";
+  if (session.transcript && session.transcript.length > 0) {
+    summary = await generateCallSummary(session.transcript, callerNumber);
+    console.log(`[STAGE 5 SUMMARY] ${summary}`);
+  }
+
+  // Build call record
+  const callRecord = {
+    callSid: session.callSid || session.id,
+    callerNumber: callerNumber,
+    forwardedFrom: session.forwardedFrom || null,
+    startTime: callStartTime,
+    endTime: callEndTime,
+    durationSeconds: durationSeconds,
+    transcript: session.transcript || [],
+    summary: summary,
+    smsSent: false,
+    smsError: null
+  };
+
+  // Send SMS summary
+  const smsResult = await sendCallSummarySms(summary, callerNumber, durationSeconds);
+  callRecord.smsSent = smsResult.sent;
+  if (!smsResult.sent) callRecord.smsError = smsResult.reason;
+
+  // Save to history
+  callHistory.push(callRecord);
+  saveCallHistory();
+
+  console.log(`📱 [STAGE 5] Call record saved. Total calls: ${callHistory.length}. SMS sent: ${callRecord.smsSent}`);
+  return callRecord;
+}
 
 // Preset ElevenLabs Voices (Tested & verified for Free & Pro accounts)
 const PRESET_VOICES = [
@@ -401,6 +564,17 @@ app.get("/api/health", (req, res) => {
       telephonyVAD: true,
       phoneBargeIn: true,
       isConfigured: Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER)
+    },
+    stage5: {
+      mobileCallForwarding: true,
+      postCallSummary: true,
+      smsDelivery: Boolean(twilioClient && env.PERSONAL_PHONE_NUMBER),
+      personalPhoneConfigured: Boolean(env.PERSONAL_PHONE_NUMBER),
+      personalPhone: env.PERSONAL_PHONE_NUMBER ? env.PERSONAL_PHONE_NUMBER.replace(/.(?=.{4})/g, "*") : "Not configured",
+      callHistoryCount: callHistory.length,
+      callHistoryFile: "call-history.json",
+      forwardingSetupEndpoint: "/api/forwarding/setup",
+      callHistoryEndpoint: "/api/calls/history"
     },
     services: {
       llm: {
@@ -1354,6 +1528,8 @@ async function handleTwilioCallerUtterance(ws, session, mulawBuffer) {
 
     // Add to session conversation history
     session.history.push({ role: "user", content: callerText });
+    // Stage 5: Track in transcript for post-call summary
+    session.transcript.push({ role: "user", text: callerText, timestamp: Date.now() });
     if (session.history.length > 6) {
       session.history = session.history.slice(-6);
     }
@@ -1425,6 +1601,8 @@ async function handleTwilioCallerUtterance(ws, session, mulawBuffer) {
 
     if (!signal.aborted) {
       session.history.push({ role: "assistant", content: fullReply });
+      // Stage 5: Track AI reply in transcript
+      session.transcript.push({ role: "assistant", text: fullReply, timestamp: Date.now() });
       console.log(`[TWILIO BRAIN REPLIED] "${fullReply}"`);
     }
   } catch (err) {
@@ -1456,7 +1634,14 @@ twilioWss.on("connection", (ws, req) => {
     silenceChunks: 0,
     speechChunksCount: 0,
     chunkCounter: 0,
-    history: []
+    history: [],
+    // Stage 5: Call tracking & summary
+    callerNumber: "Unknown",
+    forwardedFrom: null,
+    callerName: null,
+    callStartTime: new Date().toISOString(),
+    transcript: [],
+    _callProcessed: false
   };
 
   ws.on("message", async (data) => {
@@ -1477,7 +1662,17 @@ twilioWss.on("connection", (ws, req) => {
         case "start": {
           session.streamSid = msg.streamSid || msg.start?.streamSid;
           session.callSid = msg.start?.callSid;
+
+          // Stage 5: Extract caller metadata from stream parameters
+          const customParams = msg.start?.customParameters || {};
+          session.callerNumber = customParams.callerNumber || "Unknown";
+          session.forwardedFrom = customParams.forwardedFrom || null;
+          session.callerName = customParams.callerName || null;
+          session.callStartTime = new Date().toISOString();
+          if (customParams.callSid) session.callSid = customParams.callSid;
+
           console.log(`[TWILIO EVENT] Call stream started! StreamSid: ${session.streamSid}, CallSid: ${session.callSid}`);
+          console.log(`[TWILIO EVENT] Caller: ${session.callerNumber}${session.forwardedFrom ? ` (forwarded from ${session.forwardedFrom})` : ""}`);
 
           // Automatic Spoken Greeting as soon as caller's phone line connects!
           const greetingText = "Hello! Thank you for calling. I am your AI assistant. How can I help you today?";
@@ -1486,6 +1681,8 @@ twilioWss.on("connection", (ws, req) => {
           session.abortController = new AbortController();
           await streamSentenceToTwilio(ws, session, greetingText, session.abortController.signal);
           session.history.push({ role: "assistant", content: greetingText });
+          // Stage 5: Track greeting in transcript
+          session.transcript.push({ role: "assistant", text: greetingText, timestamp: Date.now() });
           break;
         }
 
@@ -1555,6 +1752,10 @@ twilioWss.on("connection", (ws, req) => {
           if (session.abortController) {
             session.abortController.abort();
           }
+          // Stage 5: Process call end — generate summary, save history, send SMS
+          processCallEnd(session).catch(err => {
+            console.error(`[STAGE 5] Post-call processing error:`, err.message);
+          });
           break;
         }
 
@@ -1571,6 +1772,10 @@ twilioWss.on("connection", (ws, req) => {
       session.abortController.abort();
     }
     console.log(`📞 [TWILIO WS DISCONNECTED] Call ended for stream: ${session.streamSid || session.id}`);
+    // Stage 5: Process call end if not already handled by "stop" event
+    processCallEnd(session).catch(err => {
+      console.error(`[STAGE 5] Post-call processing error (on close):`, err.message);
+    });
   });
 
   ws.on("error", (err) => {
@@ -1596,14 +1801,23 @@ app.all(["/twilio/incoming", "/twilio/voice"], (req, res) => {
 
   const wsUrl = `wss://${host}/twilio/media-stream`;
   const callerNumber = req.body?.From || req.query?.From || "Unknown Caller";
-  console.log(`\n📞 [TWILIO CALL INCOMING] From: ${callerNumber}`);
-  console.log(`📞 [TWILIO CALL INCOMING] Routing to Media Stream: ${wsUrl}`);
+  const calledNumber = req.body?.To || req.query?.To || "";
+  const forwardedFrom = req.body?.ForwardedFrom || req.query?.ForwardedFrom || "";
+  const callSid = req.body?.CallSid || req.query?.CallSid || "";
+  const callerName = req.body?.CallerName || req.query?.CallerName || "";
+
+  console.log(`\n📞 [TWILIO CALL INCOMING] From: ${callerNumber}${forwardedFrom ? ` (Forwarded from: ${forwardedFrom})` : ""}`);
+  console.log(`📞 [TWILIO CALL INCOMING] CallSid: ${callSid} | Routing to Media Stream: ${wsUrl}`);
 
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
     <Stream url="${wsUrl}">
       <Parameter name="callerNumber" value="${callerNumber}" />
+      <Parameter name="forwardedFrom" value="${forwardedFrom}" />
+      <Parameter name="callSid" value="${callSid}" />
+      <Parameter name="callerName" value="${callerName}" />
+      <Parameter name="calledNumber" value="${calledNumber}" />
     </Stream>
   </Connect>
 </Response>`;
@@ -1777,6 +1991,154 @@ app.post("/api/twilio/simulate-call", async (req, res) => {
   }
 });
 
+// ==============================================
+// 10. Stage 5: Mobile Call Forwarding & Summary Endpoints
+// ==============================================
+
+// Call Forwarding Setup Guide — Returns carrier-specific GSM CFNR codes
+app.get("/api/forwarding/setup", (req, res) => {
+  const env = getEnv();
+  const twilioNumber = env.TWILIO_PHONE_NUMBER || "+1XXXXXXXXXX";
+
+  res.json({
+    status: "ready",
+    twilioNumber: twilioNumber,
+    personalNumber: env.PERSONAL_PHONE_NUMBER
+      ? env.PERSONAL_PHONE_NUMBER.replace(/.(?=.{4})/g, "*")
+      : "Not configured in .env",
+    howItWorks: {
+      step1: "Your mobile carrier has a feature called Conditional Call Forwarding on No Reply (CFNR).",
+      step2: `When someone calls your personal number and you don't answer within X seconds, your carrier forwards the call to ${twilioNumber}.`,
+      step3: "Twilio receives the forwarded call and connects it to your AI Voice Agent.",
+      step4: "After the call ends, the AI generates a summary and sends it to you via SMS."
+    },
+    carriers: {
+      universal_gsm: {
+        name: "Universal GSM (Works on ALL carriers worldwide)",
+        enable: `*61*${twilioNumber}**10#`,
+        enableDescription: "Forward unanswered calls after 10 seconds (~2 rings)",
+        timerOptions: {
+          "5_seconds": `*61*${twilioNumber}**5#`,
+          "10_seconds": `*61*${twilioNumber}**10#`,
+          "15_seconds": `*61*${twilioNumber}**15#`,
+          "20_seconds": `*61*${twilioNumber}**20#`,
+          "25_seconds": `*61*${twilioNumber}**25#`,
+          "30_seconds": `*61*${twilioNumber}**30#`
+        },
+        disable: "##61#",
+        checkStatus: "*#61#"
+      },
+      jazz_warid: {
+        name: "Jazz / Warid (Pakistan)",
+        enable: `*61*${twilioNumber}**10#`,
+        disable: "##61#",
+        note: "Standard GSM codes work on Jazz/Warid networks."
+      },
+      zong: {
+        name: "Zong (Pakistan)",
+        enable: `*61*${twilioNumber}**10#`,
+        disable: "##61#",
+        note: "Standard GSM codes work on Zong 4G network."
+      },
+      telenor: {
+        name: "Telenor (Pakistan)",
+        enable: `*61*${twilioNumber}**10#`,
+        disable: "##61#",
+        note: "Standard GSM codes work on Telenor network."
+      },
+      ufone: {
+        name: "Ufone (Pakistan)",
+        enable: `*61*${twilioNumber}**10#`,
+        disable: "##61#",
+        note: "Standard GSM codes work on Ufone network."
+      },
+      airtel: {
+        name: "Airtel (India)",
+        enable: `*61*${twilioNumber}**10#`,
+        disable: "##61#",
+        note: "Standard GSM codes work on Airtel network."
+      },
+      tmobile: {
+        name: "T-Mobile (USA)",
+        enable: `*61*${twilioNumber}*11*10#`,
+        disable: "##61#",
+        note: "T-Mobile uses a slightly different format with service class *11*."
+      },
+      att: {
+        name: "AT&T (USA)",
+        enable: `*61*${twilioNumber}*11*10#`,
+        disable: "##61#",
+        note: "AT&T may require contacting customer support for international forwarding."
+      }
+    },
+    gsmTimerNote: "GSM networks only support forwarding timers in 5-second increments (5s, 10s, 15s, 20s, 25s, 30s). An exact 8-second timer is not possible. We recommend 10 seconds (~2 rings) as a good balance.",
+    important: [
+      "Forwarding to an international number (e.g. US Twilio number) may incur call forwarding airtime charges from your carrier.",
+      "Make sure your Twilio number starts with a + and country code (e.g. +12345678901).",
+      "Open your phone's dialer app, type the enable code, and press the Call/Dial button.",
+      "To check if forwarding is active, dial *#61# and press Call.",
+      "To disable forwarding, dial ##61# and press Call."
+    ]
+  });
+});
+
+// Call History — Returns the last 50 calls with transcripts and summaries
+app.get("/api/calls/history", (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 50, 50);
+  const recentCalls = callHistory.slice(-limit).reverse(); // Most recent first
+  res.json({
+    totalCalls: callHistory.length,
+    showing: recentCalls.length,
+    calls: recentCalls
+  });
+});
+
+// Single Call Detail — Returns full detail for a specific call
+app.get("/api/calls/:callSid", (req, res) => {
+  const { callSid } = req.params;
+  const call = callHistory.find(c => c.callSid === callSid);
+  if (!call) {
+    return res.status(404).json({ error: `Call with SID '${callSid}' not found.` });
+  }
+  res.json(call);
+});
+
+// Test SMS Summary — Sends a test summary SMS to your personal phone
+app.post("/api/calls/test-summary-sms", async (req, res) => {
+  try {
+    const env = getEnv();
+
+    if (!env.PERSONAL_PHONE_NUMBER) {
+      return res.status(400).json({
+        error: "PERSONAL_PHONE_NUMBER is not set in .env. Add your mobile number to receive SMS summaries."
+      });
+    }
+
+    if (!twilioClient || !env.TWILIO_PHONE_NUMBER) {
+      return res.status(400).json({
+        error: "Twilio credentials not fully configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER in .env."
+      });
+    }
+
+    const testSummary = "This is a test SMS from your AI Voice Agent. " +
+      "When someone calls your phone and you don't answer, the AI will handle the call and send you a summary like this one. " +
+      "Stage 5 is working!";
+
+    const smsResult = await sendCallSummarySms(testSummary, "+1-TEST-CALLER", 45);
+
+    res.json({
+      success: smsResult.sent,
+      message: smsResult.sent
+        ? `Test SMS sent to ${env.PERSONAL_PHONE_NUMBER.replace(/.(?=.{4})/g, "*")}!`
+        : `SMS delivery failed: ${smsResult.reason}`,
+      details: smsResult
+    });
+  } catch (err) {
+    console.error("[TEST SMS ERROR]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Start the server (HTTP + WebSocket on same port)
 server.listen(PORT, () => {
   console.log(`\n======================================================`);
@@ -1784,6 +2146,8 @@ server.listen(PORT, () => {
   console.log(`⚡ Browser Stream : ws://localhost:${PORT}/ws/voice (Stage 3)`);
   console.log(`📞 Twilio Stream  : ws://localhost:${PORT}/twilio/media-stream (Stage 4)`);
   console.log(`📞 Twilio Webhook : POST http://localhost:${PORT}/twilio/incoming (Stage 4)`);
+  console.log(`📱 Forwarding     : GET  http://localhost:${PORT}/api/forwarding/setup (Stage 5)`);
+  console.log(`📱 Call History   : GET  http://localhost:${PORT}/api/calls/history (Stage 5)`);
   console.log(`📡 Health Check   : GET  http://localhost:${PORT}/api/health`);
   console.log(`📡 Twilio Status  : GET  http://localhost:${PORT}/api/twilio/status`);
   console.log(`🎭 Voices List    : GET  http://localhost:${PORT}/api/voices`);
@@ -1797,6 +2161,8 @@ server.listen(PORT, () => {
   console.log(`👂 Ears (STT)     : ${groq ? "✅ Groq Whisper Turbo" : "⚠️  Simulation"}${env.DEEPGRAM_API_KEY ? " + Deepgram" : ""}`);
   console.log(`👄 Mouth (TTS)    : ${env.ELEVENLABS_API_KEY ? (env.ELEVENLABS_API_KEY.startsWith("sk_") ? "✅ ElevenLabs Active (Flash v2.5 Pipelined + Telephony μ-law)" : "⚠️  Invalid Key (Key ID entered instead of sk_...)") : "ℹ️  Browser Speech Fallback"}`);
   console.log(`📞 Phone (Twilio) : ${Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER) ? "✅ Active (" + env.TWILIO_PHONE_NUMBER + ")" : "ℹ️  Simulator Ready (Add TWILIO_* to .env to connect real number)"}`);
+  console.log(`📱 Call Fwd (S5)  : ${env.PERSONAL_PHONE_NUMBER ? "✅ SMS summaries → " + env.PERSONAL_PHONE_NUMBER.replace(/.(?=.{4})/g, "*") : "ℹ️  Add PERSONAL_PHONE_NUMBER to .env for SMS summaries"}`);
+  console.log(`📱 Call History   : ${callHistory.length} calls recorded | call-history.json`);
   console.log(`⚡ Latency Goal   : <500ms Time-to-First-Audio (TTFA) + Live Telephone Barge-in`);
   console.log(`======================================================\n`);
 });

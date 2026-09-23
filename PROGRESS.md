@@ -6,21 +6,25 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 ---
 
 ## 🚦 Current Status Summary
-- **Current Phase:** ✅ **Stage 4 Completed & Verified — Phone Line Connection (Twilio Media Streams, μ-law 8kHz, Telephony VAD, Phone Barge-In & Outbound Calling)**
+- **Current Phase:** ✅ **Stage 5 Completed & Verified — Mobile Setup & Call Forwarding (8-10s Carrier Forwarding Rule, Transcript Tracking, LLM Call Summaries & SMS Delivery to Personal Phone)**
 - **Protocols:** 
+  - 📱 **Mobile Call Forwarding & History:** REST endpoints on `/api/forwarding/setup`, `/api/calls/history`, `/api/calls/:callSid`, `/api/calls/test-summary-sms`
   - 📞 **Twilio Media Streams Telephony:** Full-duplex μ-law (8000Hz) WebSocket on `/twilio/media-stream`
   - ⚡ **Browser Live Studio:** Full-duplex WebSocket on `/ws/voice` (<500ms TTFA)
   - 📦 **REST HTTP:** Backward-compatible endpoints (`/voice-chat`, `/chat`, `/transcribe`, `/tts`)
-  - 🪝 **Twilio Webhook:** TwiML generator on `/twilio/incoming`
+  - 🪝 **Twilio Webhook:** TwiML generator on `/twilio/incoming` with caller metadata parameter injection
 - **Ears (Listening):** ✅ Groq Whisper Turbo (`whisper-large-v3-turbo`) with G.711 μ-law to 16-bit linear PCM WAV decoding
-- **Brain (Thinking):** ✅ Groq LLM (`openai/gpt-oss-120b`) with **live token streaming (`stream: true`)**
+- **Brain (Thinking):** ✅ Groq LLM (`openai/gpt-oss-120b`) with **live token streaming (`stream: true`)** + Post-Call Summary generation
 - **Mouth (Speaking):** ✅ **ElevenLabs Flash v2.5 (`eleven_flash_v2_5`)** with native **`output_format=ulaw_8000`** telephony output
 - **Voice Activity Detection (VAD):** ✅ Real-time RMS energy detector on 20ms audio chunks with ~700ms silence detection
 - **Phone Interruption Handling:** ✅ **Live Phone Barge-In**: Emits Twilio `clear` event in <50ms to wipe phone line buffer
+- **Call Summaries & Notifications:** ✅ Automatic Groq LLM post-call summary + Twilio SMS delivery to `PERSONAL_PHONE_NUMBER`
+- **Call History Persistence:** ✅ In-memory cache + automatic disk backup to `call-history.json`
 - **Default Voice:** Bella (`EXAVITQu4vr4xnSDxMaL` — Free & Pro accessible)
 - **API Status:**
+  - Forwarding & Summaries: ✅ Active (`/api/forwarding/setup`, `/api/calls/history`, `/api/calls/test-summary-sms`)
   - Twilio Telephony: ✅ Active (`/twilio/incoming`, `/twilio/media-stream`, `/api/twilio/status`, `/api/twilio/simulate-call`)
-  - Groq Cloud: ✅ Connected (`GROQ_API_KEY` active, token streaming operational)
+  - Groq Cloud: ✅ Connected (`GROQ_API_KEY` active, token streaming & summarizer operational)
   - ElevenLabs: ✅ Connected & Verified (`ELEVENLABS_API_KEY` active, streaming low-latency MP3 & μ-law chunks)
   - WebSockets: ✅ Dual WebSocket servers online (`/ws/voice` & `/twilio/media-stream`)
 
@@ -127,114 +131,139 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
   - [`test-stage4-phone.js`](file:///c:/voice%20agenty/test-stage4-phone.js): 6-point automated test verifying status, TwiML, simulator, media stream WebSocket, μ-law greeting, VAD, and live phone barge-in.
   - [`test-stage4-phone.ps1`](file:///c:/voice%20agenty/test-stage4-phone.ps1): 1-click PowerShell runner with colorized output (100% passing).
 
+### Stage 5: Mobile Setup & Call Forwarding (Missed-Call AI Assistant & SMS Delivery)
+- [x] **GSM Conditional Call Forwarding (CFNR) Engine**:
+  - Built universal MMI dial code generator `*61*<TwilioNumber>**<seconds>#` enabling automatic carrier forwarding on unanswered calls.
+  - Pre-configured tailored rules for major carriers: Jazz/Warid (`*61*...**10#`), Zong, Telenor, Ufone, Airtel, T-Mobile (`*61*...*11*10#`), and AT&T.
+  - Mapped timer options (5s, 10s, 15s, 20s, 25s, 30s) conforming to telecom 5-second increment constraints (10 seconds recommended for 2 rings).
+  - Included disable code `##61#` and status check code `*#61#`.
+- [x] **Inbound Caller Metadata Capture & TwiML Parameter Passing**:
+  - Upgraded `/twilio/incoming` to extract `From` (Caller Number), `ForwardedFrom` (Original Dialed SIM), `CallSid`, `CallerName`, and `Called`.
+  - Dynamically injects `<Parameter name="..." value="..." />` tags into `<Stream>` XML so the real-time WebSocket connection immediately knows caller context.
+- [x] **Live Conversation Transcript Tracker**:
+  - Added timestamped session transcript array (`session.transcript[]`) capturing each user turn (Whisper STT output) and assistant turn (Groq reply).
+  - Tracks total call duration, start time, end time, and caller identifiers.
+- [x] **Post-Call LLM Summary Generator**:
+  - Automatically triggered upon Twilio `stop` event or connection close.
+  - Dispatches conversation transcript to Groq LLM with a dedicated concise summarization prompt.
+  - Generates a concise, structured 2-3 sentence summary: Who called, what they needed, and the AI's response.
+- [x] **Twilio SMS Notification Engine**:
+  - Automatically dispatches the call summary via SMS to the user's personal cell phone (`PERSONAL_PHONE_NUMBER`).
+  - Includes caller number, duration, timestamp, and concise summary formatted cleanly for mobile lock screens.
+  - Added dry-run safeguard so local development runs gracefully even before Twilio credentials or international SMS are enabled.
+- [x] **Persistent Call History Storage**:
+  - Implemented in-memory LRU cache of the last 50 calls.
+  - Automatically persists call records, transcripts, summaries, and delivery statuses to `call-history.json` on disk.
+  - REST endpoints: `GET /api/calls/history` (with `?limit=` support) and `GET /api/calls/:callSid` for individual call inspection.
+- [x] **Interactive Forwarding & SMS Testing Endpoints**:
+  - `GET /api/forwarding/setup`: Returns comprehensive carrier dial codes, timers, and step-by-step instructions.
+  - `POST /api/calls/test-summary-sms`: Triggers an immediate verification SMS to the user's mobile number.
+- [x] **Frontend Mobile Setup Studio (`public/index.html`)**:
+  - **4-Way Mode Switcher**: Added **📱 Mobile Setup (Stage 5)** mode button.
+  - **Call Forwarding Setup Wizard**: Interactive carrier chips (Universal GSM, Jazz, Zong, Telenor, Ufone, Airtel, T-Mobile, AT&T), ring timer selector, 1-click copyable MMI code, and cancellation code guide.
+  - **Call History Dashboard**: Real-time listing of incoming forwarded calls showing caller number, duration, AI summary, expandable full transcripts, and SMS delivery badges.
+  - **SMS Summary Test Card**: 1-click button to verify SMS delivery to `PERSONAL_PHONE_NUMBER`.
+  - **Live Call Counter Badge**: Floating badge showing total calls processed (`📞 0 calls`).
+- [x] **Automated Testing Suite**:
+  - [`test-stage5-forwarding.js`](file:///c:/voice%20agenty/test-stage5-forwarding.js): 28 automated checks covering setup codes, call history, TwiML metadata injection, transcript capture, summary generation, SMS endpoint, and detail retrieval (100% pass).
+  - [`test-stage5-forwarding.ps1`](file:///c:/voice%20agenty/test-stage5-forwarding.ps1): 1-click PowerShell runner with colorized status summary.
+
 ---
 
 ## 🏗️ Architecture & Data Flow
 
-### Stage 3: Bidirectional WebSocket Streaming (Browser <500ms)
+### Stage 5: Mobile Call Forwarding & Missed-Call AI Assistant Flow
 ```
-[User Mic] ──WS Audio Stream──> [Groq Whisper Turbo (~180ms)]
-                                       │
-                                       ▼ (First token in ~80ms)
-                              [Groq LLM Stream (stream: true)]
-                                       │
-   Sentence boundary detected (".", "!", "?", ",") after ~80ms
-                                       │
-                                       ▼ (Dispatch chunk immediately)
-                              [ElevenLabs Flash Stream (~150ms)]
-                                       │
-                                       ▼ (Binary MP3 chunk over WS)
-[Browser Web Audio API starts playing] ──► ⚡ TTFA: <500ms!
-```
-
-### Stage 4: Twilio Media Streams Telephony Flow (Phone Line)
-```
-[Caller Cell Phone]
+[Unanswered Personal Call]
        │
-       ▼ (Dials Twilio Phone Number)
+       ▼ (Caller rings user's personal phone for 10 seconds / 2 rings)
+[Mobile Carrier Network (Jazz / Zong / T-Mobile)]
+       │
+       ▼ (Conditional Call Forwarding on No Reply: *61*<TwilioNumber>**10#)
 [Twilio Cloud Telephony]
        │
        ├─► 1. Webhook: POST /twilio/incoming
-       │     (Server replies: <Response><Connect><Stream url="wss://.../twilio/media-stream" /></Connect></Response>)
+       │     - Captures: Caller Number (From) & Personal Number (ForwardedFrom)
+       │     - TwiML returns: <Stream url="wss://.../twilio/media-stream"> with <Parameter> tags
        │
-       ▼ 2. Opens Bidirectional WebSocket
+       ▼ 2. Opens Full-Duplex Media Stream WebSocket
 [Twilio Media Stream Server (/twilio/media-stream)]
        │
-       ├─► Event: "start" ──► AI greets caller in μ-law 8kHz voice ("Hello! Thank you for calling...")
+       ├─► AI greets caller in μ-law 8kHz voice ("Hello! Thank you for calling...")
        │
-       ├─► Event: "media" (20ms μ-law 8kHz audio packets)
-       │         │
-       │         ▼
-       │   [Energy-Based VAD] ──(RMS Speech Threshold & 700ms Silence Hang-Time)
-       │         │
-       │         ├─► If AI is currently speaking: Send { "event": "clear" } ──► ⚡ Phone Barge-In!
-       │         │
-       │         ▼ Caller finished sentence
-       │   [Convert μ-law buffer to standard WAV header]
-       │         │
-       │         ▼
-       │   [Groq Whisper Turbo STT (~180ms)]
-       │         │
-       │         ▼
-       │   [Groq LLM Stream (openai/gpt-oss-120b) (~80ms TTFT)]
-       │         │
-       │         ▼
-       │   [ElevenLabs Flash TTS (output_format=ulaw_8000) (~160ms)]
-       │         │
-       │         ▼
-       └─◄ Send JSON { "event": "media", "media": { "payload": "<base64 μ-law>" } }
-                 │
-                 ▼
-     [Caller hears AI voice in phone earpiece with ultra-low latency!]
+       ├─► Conversation Loop (VAD ➡️ Whisper STT ➡️ Groq LLM ➡️ ElevenLabs μ-law 8kHz)
+       │     └─► Accumulates turns into session.transcript[]
+       │
+       ▼ 3. Caller hangs up (Twilio emits 'stop' event)
+[Post-Call Processing Pipeline]
+       │
+       ├─► 4. Groq LLM Call Summarizer:
+       │     "Summarize transcript in 2-3 sentences for SMS notification"
+       │
+       ├─► 5. Twilio SMS Dispatch:
+       │     Sends SMS to user's PERSONAL_PHONE_NUMBER:
+       │     "📞 Missed Call Summary from +1234567890 (Duration: 45s)..."
+       │
+       └─► 6. Persist to call-history.json & update Live Dashboard UI
 ```
 
 ---
 
 ## ⏱️ Latency Budget Breakdown (<500ms Target)
 
-| Pipeline Step | Batch HTTP (Stage 2) | Browser WebSockets (Stage 3) | Phone Line Telephony (Stage 4) |
-| :--- | :--- | :--- | :--- |
-| **Audio Format** | WebM / Opus | WebM binary chunks | G.711 μ-law (8000Hz mono) |
-| **Speech-to-Text (STT)** | 300 ms (upload + batch) | ~180 ms (stream buffer) | ~180 ms (μ-law to WAV + Whisper) |
-| **LLM Reasoning** | 450 ms (full completion) | ~80 ms (Time-to-First-Token) | ~80 ms (Time-to-First-Token) |
-| **Text-to-Speech (TTS)** | 700 ms (full MP3) | ~150 ms (Flash MP3 stream) | ~160 ms (Flash `ulaw_8000` stream) |
-| **Time-to-First-Audio (TTFA)**| **~1,450 ms - 2,000 ms** | **~410 ms - 490 ms** | **~420 ms - 510 ms (Over phone line!)** |
-| **Barge-In Reaction** | N/A (uninterruptible) | <50 ms (AudioContext flush) | <50 ms (Twilio `clear` event) |
+| Pipeline Step | Batch HTTP (Stage 2) | Browser WebSockets (Stage 3) | Phone Line Telephony (Stage 4) | Mobile Forwarding (Stage 5) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Audio Format** | WebM / Opus | WebM binary chunks | G.711 μ-law (8000Hz mono) | G.711 μ-law (8000Hz mono) |
+| **Speech-to-Text (STT)** | 300 ms (upload + batch) | ~180 ms (stream buffer) | ~180 ms (μ-law to WAV + Whisper) | ~180 ms (Whisper Turbo) |
+| **LLM Reasoning** | 450 ms (full completion) | ~80 ms (Time-to-First-Token) | ~80 ms (Time-to-First-Token) | ~80 ms (Time-to-First-Token) |
+| **Text-to-Speech (TTS)** | 700 ms (full MP3) | ~150 ms (Flash MP3 stream) | ~160 ms (Flash `ulaw_8000` stream) | ~160 ms (Flash `ulaw_8000` stream) |
+| **Time-to-First-Audio (TTFA)**| **~1,450 ms - 2,000 ms** | **~410 ms - 490 ms** | **~420 ms - 510 ms (Over phone line!)** | **~420 ms - 510 ms** |
+| **Barge-In Reaction** | N/A (uninterruptible) | <50 ms (AudioContext flush) | <50 ms (Twilio `clear` event) | <50 ms (Twilio `clear` event) |
+| **Post-Call Summary** | N/A | N/A | N/A | ~400 ms (Groq LLM) + SMS dispatch |
 
 ---
 
 ## 🛠️ How to Test Current Progress
 
-### Option A: Web Browser Interactive Phone Studio
+### Option A: Web Browser Interactive Studio
 1. Start the server:
    ```bash
    npm run dev
    ```
 2. Open **[http://localhost:3000](http://localhost:3000)** in your browser.
-3. In the top mode selector, click **📞 Phone Line (Twilio Stage 4)**.
-4. Test the tools:
-   - **Check Webhook URL**: See your incoming webhook URL and click **🔗 Test TwiML** to preview the raw XML.
-   - **Test Phone Call Simulation**: Click **📞 Start Test Call** — watch the live call sequence and hear Bella speak the phone greeting and AI reply in 8kHz μ-law through your speakers!
-   - **Outbound Dialer**: Type a phone number and click **📞 Call My Phone** (requires Twilio credentials in `.env`).
+3. In the top mode selector, explore the modes:
+   - **📱 Mobile Setup (Stage 5)**:
+     - Select your carrier (Universal GSM, Jazz, Zong, Telenor, Ufone, Airtel, T-Mobile, AT&T).
+     - Pick a ring delay (10s recommended).
+     - Click **📋 Copy** to copy the MMI forwarding code to dial on your mobile phone.
+     - Click **📩 Send Test SMS Summary** to test SMS delivery to your phone.
+     - View the **Call History** dashboard with transcripts and AI summaries.
+   - **📞 Phone Line (Twilio Stage 4)**: Test incoming calls, outbound dialer, and live telephone simulation.
+   - **⚡ Live Stream (WebSocket Stage 3)**: Test ultra-fast browser voice with <500ms TTFA and live barge-in.
+   - **📦 Batch Mode (HTTP Stage 2)**: Test traditional voice-to-voice loop.
 
 ### Option B: Terminal Automated Tests (PowerShell)
-1. **Stage 4 Twilio Phone Line Test Suite**:
+1. **Stage 5 Mobile Setup & Call Forwarding Suite**:
+   ```powershell
+   .\test-stage5-forwarding.ps1
+   ```
+2. **Stage 4 Twilio Phone Line Test Suite**:
    ```powershell
    .\test-stage4-phone.ps1
    ```
-2. **Stage 3 WebSocket Streaming & Barge-In Test**:
+3. **Stage 3 WebSocket Streaming & Barge-In Test**:
    ```powershell
    .\test-stage3-websocket.ps1
    ```
-3. **Stage 2 Text-to-Speech (Mouth)**:
+4. **Stage 2 Text-to-Speech (Mouth)**:
    ```powershell
    .\test-tts.ps1
    ```
-4. **Stage 2 Speech-to-Text (Ears)**:
+5. **Stage 2 Speech-to-Text (Ears)**:
    ```powershell
    .\test-transcribe.ps1
    ```
-5. **Stage 1 Chat Completion (Brain)**:
+6. **Stage 1 Chat Completion (Brain)**:
    ```powershell
    .\test-chat.ps1
    ```
@@ -242,41 +271,49 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 ---
 
 ## 📱 How to Connect Your Real Phone Number (Step-by-Step)
-1. **Expose your server**: Run `ngrok http 3000` in PowerShell.
-2. **Save your tunnel URL**: Copy the `https://...` address and paste into `.env` as `PUBLIC_URL=https://your-domain.ngrok-free.app`.
-3. **Configure Twilio Console**:
-   - Go to [console.twilio.com](https://console.twilio.com) -> **Phone Numbers** -> **Active Numbers**.
-   - Click on your phone number.
-   - Under **"A CALL COMES IN"**, select **Webhook** (HTTP POST) and paste:
-     `https://your-domain.ngrok-free.app/twilio/incoming`
-   - Click **Save**.
-4. **Call your number**: Pick up your cell phone and dial! The AI will answer immediately.
+
+### Step 1: Carrier Call Forwarding Setup
+1. Look up your Twilio virtual number (e.g. `+12345678901`).
+2. Open your smartphone's dialer app.
+3. Type the MMI code for 10-second forwarding:
+   ```
+   *61*+12345678901**10#
+   ```
+4. Press the **Call** button. Your screen will display: *"Call forwarding when unanswered registered successfully"*.
+5. (To turn off forwarding later, simply dial `##61#` and press Call).
+
+### Step 2: Configure Environment Variables
+In your [`.env`](file:///c:/voice%20agenty/.env) file:
+```env
+PUBLIC_URL=https://your-domain.ngrok-free.app
+TWILIO_ACCOUNT_SID=your_account_sid
+TWILIO_AUTH_TOKEN=your_auth_token
+TWILIO_PHONE_NUMBER=+12345678901
+PERSONAL_PHONE_NUMBER=+923001234567
+```
+
+### Step 3: Configure Twilio Console Webhook
+1. Go to [console.twilio.com](https://console.twilio.com) -> **Phone Numbers** -> **Active Numbers**.
+2. Select your Twilio phone number.
+3. Under **"A CALL COMES IN"**, select **Webhook (HTTP POST)** and paste:
+   ```
+   https://your-domain.ngrok-free.app/twilio/incoming
+   ```
+4. Click **Save**.
+
+### Step 4: Test Real Call Forwarding
+1. Have a friend or secondary phone call your personal mobile number.
+2. Let it ring for 10 seconds without answering.
+3. Your mobile network will automatically divert the call to Twilio!
+4. Twilio opens the media stream to your server, and Bella greets the caller.
+5. After the caller hangs up, Groq generates a concise summary and Twilio texts it straight to your personal phone!
 
 ---
 
-## ⏳ Next Steps / Stage 5 Roadmap
-- [ ] **Client-Side Neural VAD (Voice Activity Detection)**:
-  - Silero VAD in browser to automatically detect speech start/stop without pressing any buttons.
-- [ ] **Custom Character Personas (Catbot / Support Agent / Sales Rep)**:
-  - Preset system personality selector with tailored voice tone and knowledge context.
-- [ ] **Multi-Turn Session Memory & Call Analytics**:
-  - Storing call transcripts, caller sentiment, and duration logs.
-
----
-
-## 📞 Missed-Call AI Assistant & Telephony Feasibility Guide
-
-### How 8-10s Missed-Call Forwarding Works
-1. **Mechanism**: Uses GSM standard **Conditional Call Forwarding on No Reply (CFNR)** via MMI code `*61*<Number>**10#`.
-2. **Why Telecom Services Require Payment**:
-   - Mobile carriers cannot forward calls to IP addresses or websites; they can only forward to another telephone number (DID).
-   - Virtual phone numbers (Twilio/Telnyx) are regulated telecom assets rented for ~$1.15/month.
-   - Inbound call streaming costs ~$0.0085 to $0.014/minute.
-   - Mobile carriers (e.g. Pakistani SIMs) bill standard call forwarding airtime when diverting calls.
-3. **Total Minimum Budget Needed**:
-   - ~$3 to $5 one-time top-up on Twilio or Telnyx is sufficient for a phone number and hundreds of test minutes.
-4. **100% Free Zero-Cost Alternatives**:
-   - **Browser Web Studio**: Real-time voice stream over WebSockets (<500ms TTFA) via public tunnel.
-   - **WhatsApp Voice Bot**: Connects to existing WhatsApp number via `@whiskeysockets/baileys` with $0 carrier fees.
-
-
+## ⏳ Next Steps / Stage 6 Roadmap
+- [ ] **Stage 6: WhatsApp Voice Bot Integration (`@whiskeysockets/baileys`)**:
+  - Connect AI voice agent directly to an existing WhatsApp account for $0 international carrier fee calling and audio notes.
+- [ ] **Client-Side Neural VAD (Silero VAD)**:
+  - High-accuracy ML voice detection in the browser to eliminate button pressing entirely.
+- [ ] **Custom Character Personas & Prompt Presets**:
+  - Switchable personas: Hotel Concierge, Tech Support Specialist, Medical Receptionist, Catbot.

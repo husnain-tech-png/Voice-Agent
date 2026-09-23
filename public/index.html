@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Voice Agent — Stage 3: Real-Time Streaming (WebSockets &lt;500ms)</title>
+  <title>AI Voice Agent — Stage 5: Mobile Setup & Call Forwarding</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -627,6 +627,156 @@
       gap: 8px;
       margin-top: 8px;
     }
+
+    .phone-input-row input[type="text"] {
+      flex: 1;
+      background: rgba(2, 6, 23, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: #f8fafc;
+      font-size: 0.85rem;
+      outline: none;
+      font-family: 'Outfit', sans-serif;
+    }
+    .phone-input-row input[type="text"]:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+    }
+
+    /* Stage 5: Mobile Setup Styles */
+    .mobile-studio {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 12px;
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    .fwd-code-box {
+      background: rgba(2, 6, 23, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      color: #34d399;
+      word-break: break-all;
+    }
+
+    .timer-select {
+      background: rgba(15, 23, 42, 0.8);
+      color: #f8fafc;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      outline: none;
+      cursor: pointer;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    .carrier-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .carrier-chip {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .carrier-chip:hover, .carrier-chip.active {
+      border-color: var(--primary);
+      background: rgba(56, 189, 248, 0.1);
+    }
+
+    .call-history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .call-record {
+      background: rgba(2, 6, 23, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .call-record-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .call-record-summary {
+      font-size: 0.82rem;
+      color: #cbd5e1;
+      line-height: 1.45;
+    }
+
+    .call-record-meta {
+      font-size: 0.72rem;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    .call-record-transcript {
+      display: none;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 0.78rem;
+    }
+
+    .transcript-toggle {
+      background: none;
+      border: none;
+      color: var(--primary);
+      font-size: 0.72rem;
+      cursor: pointer;
+      padding: 0;
+      margin-top: 4px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 30px 20px;
+      color: #64748b;
+      font-size: 0.88rem;
+    }
+    .empty-state .empty-icon {
+      font-size: 2.2rem;
+      margin-bottom: 8px;
+    }
+
+    .call-counter-badge {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: rgba(16, 185, 129, 0.2);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: #34d399;
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 9999px;
+    }
   </style>
 </head>
 <body>
@@ -641,18 +791,21 @@
         <span id="phoneBadge" class="badge badge-purple">📞 Phone: Checking...</span>
       </div>
     </div>
-    <p class="subtitle">Stage 4 — Real Phone Line Connection (Twilio Media Streams) &amp; Ultra-Low Latency Streaming</p>
+    <p class="subtitle">Stage 5 — Mobile Call Forwarding, Summaries &amp; Ultra-Low Latency Streaming</p>
 
-    <!-- Mode Selector: Stage 3 (Real-Time WebSocket) vs Stage 2 (Batch HTTP) vs Stage 4 (Twilio Phone) -->
+    <!-- Mode Selector: Stage 3 (WS) vs Stage 2 (HTTP) vs Stage 4 (Phone) vs Stage 5 (Mobile Setup) -->
     <div class="mode-selector">
       <button class="mode-btn active" id="modeWsBtn">
-        ⚡ Live Stream (<span style="color:#38bdf8;">WS &lt;500ms</span>)
+        ⚡ Live Stream (<span style="color:#38bdf8;">WS</span>)
       </button>
       <button class="mode-btn" id="modeHttpBtn">
-        📦 Batch Mode (HTTP)
+        📦 Batch (HTTP)
       </button>
       <button class="mode-btn" id="modePhoneBtn">
-        📞 Phone Line (<span style="color:#c084fc;">Twilio Stage 4</span>)
+        📞 Phone (<span style="color:#c084fc;">Twilio</span>)
+      </button>
+      <button class="mode-btn" id="modeMobileBtn">
+        📱 Mobile Setup (<span style="color:#34d399;">S5</span>)
       </button>
     </div>
 
@@ -899,6 +1052,138 @@
       </div>
     </div>
   </div>
+
+  <!-- Stage 5: Mobile Setup & Call Forwarding Studio -->
+  <div id="mobileStudio" class="mobile-studio" style="display: none;">
+    <!-- 1. Call Forwarding Setup Wizard -->
+    <div class="phone-card">
+      <div class="phone-card-title">
+        <span>📱 Call Forwarding Setup Wizard</span>
+        <span class="badge badge-green" id="fwdStatusBadge">Ready</span>
+      </div>
+      <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 10px;">
+        When someone calls your personal mobile number and you don't answer, your carrier will automatically forward the call to your AI Voice Agent.
+      </p>
+
+      <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; font-weight: 600;">Forwarding Timer:</div>
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+        <select id="fwdTimerSelect" class="timer-select">
+          <option value="5">5 seconds (~1 ring)</option>
+          <option value="10" selected>10 seconds (~2 rings) — Recommended</option>
+          <option value="15">15 seconds (~3 rings)</option>
+          <option value="20">20 seconds (~4 rings)</option>
+          <option value="25">25 seconds (~5 rings)</option>
+          <option value="30">30 seconds (~6 rings)</option>
+        </select>
+        <span style="font-size: 0.72rem; color: #64748b;">GSM supports 5s increments only</span>
+      </div>
+
+      <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; font-weight: 600;">Your Twilio Number:</div>
+      <div class="fwd-code-box" style="color: #38bdf8; margin-bottom: 8px;">
+        <span id="fwdTwilioNumber">Loading...</span>
+      </div>
+
+      <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; font-weight: 600;">✅ Dial This Code to Enable Forwarding:</div>
+      <div class="fwd-code-box">
+        <span id="fwdEnableCode">*61*+1XXXXXXXXXX**10#</span>
+        <button type="button" class="btn-action-small" id="copyFwdCodeBtn">📋 Copy</button>
+      </div>
+
+      <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; margin-top: 8px; font-weight: 600;">❌ Dial This Code to Disable Forwarding:</div>
+      <div class="fwd-code-box" style="color: #f87171;">
+        <span>##61#</span>
+        <button type="button" class="btn-action-small" onclick="navigator.clipboard.writeText('##61#').then(()=>{this.textContent='✅ Copied!';setTimeout(()=>{this.textContent='📋 Copy'},2000);})">📋 Copy</button>
+      </div>
+
+      <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; margin-top: 8px; font-weight: 600;">🔍 Check If Forwarding is Active:</div>
+      <div class="fwd-code-box" style="color: #fde047;">
+        <span>*#61#</span>
+        <button type="button" class="btn-action-small" onclick="navigator.clipboard.writeText('*#61#').then(()=>{this.textContent='✅ Copied!';setTimeout(()=>{this.textContent='📋 Copy'},2000);})">📋 Copy</button>
+      </div>
+
+      <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 10px; font-weight: 600;">Select Your Carrier:</div>
+      <div class="carrier-grid" id="carrierGrid">
+        <div class="carrier-chip active" data-carrier="universal_gsm">🌍 Universal GSM</div>
+        <div class="carrier-chip" data-carrier="jazz_warid">🇵🇰 Jazz / Warid</div>
+        <div class="carrier-chip" data-carrier="zong">🇵🇰 Zong</div>
+        <div class="carrier-chip" data-carrier="telenor">🇵🇰 Telenor</div>
+        <div class="carrier-chip" data-carrier="ufone">🇵🇰 Ufone</div>
+        <div class="carrier-chip" data-carrier="airtel">🇮🇳 Airtel</div>
+        <div class="carrier-chip" data-carrier="tmobile">🇺🇸 T-Mobile</div>
+        <div class="carrier-chip" data-carrier="att">🇺🇸 AT&amp;T</div>
+      </div>
+
+      <div style="margin-top: 10px; padding: 10px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 8px; font-size: 0.78rem; color: #fde047;">
+        ⚠️ Forwarding to an international Twilio number may incur carrier airtime charges. Open your phone dialer, type the code, and press Call.
+      </div>
+    </div>
+
+    <!-- 2. SMS Summary Test Card -->
+    <div class="phone-card">
+      <div class="phone-card-title">
+        <span>📩 SMS Call Summary Delivery</span>
+        <span class="badge badge-blue">Twilio SMS</span>
+      </div>
+      <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 10px;">
+        After each forwarded call, the AI generates a summary and sends it to your phone via SMS.
+      </p>
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 0.82rem;">
+        <span style="color: #94a3b8;">Your number:</span>
+        <strong id="smsPersonalNumber" style="color: #f8fafc;">Not configured</strong>
+      </div>
+      <button type="button" class="btn btn-send" id="testSmsSummaryBtn" style="width: 100%;">📩 Send Test SMS Summary</button>
+      <div id="smsTestResult" style="font-size: 0.78rem; margin-top: 6px; display: none;"></div>
+    </div>
+
+    <!-- 3. Call History Dashboard -->
+    <div class="phone-card" style="position: relative;">
+      <span class="call-counter-badge" id="callCounterBadge">📞 0 calls</span>
+      <div class="phone-card-title">
+        <span>📋 Call History</span>
+        <button type="button" class="btn-action-small" id="refreshHistoryBtn">🔄 Refresh</button>
+      </div>
+      <div id="callHistoryContainer">
+        <div class="empty-state">
+          <div class="empty-icon">📞</div>
+          <div>No calls yet</div>
+          <div style="font-size: 0.75rem; margin-top: 4px;">Set up call forwarding above to start receiving calls!</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. How It Works Guide -->
+    <div class="phone-card">
+      <div class="phone-card-title">
+        <span>📖 How the 10-Second Forwarding Rule Works</span>
+      </div>
+      <div class="step-guide">
+        <div class="step-guide-item">
+          <div class="step-num">1</div>
+          <div>
+            <strong>Someone calls your personal cell phone.</strong> The phone rings normally.
+          </div>
+        </div>
+        <div class="step-guide-item">
+          <div class="step-num">2</div>
+          <div>
+            <strong>You don't answer within 10 seconds (~2 rings).</strong> Your carrier's GSM CFNR rule activates.
+          </div>
+        </div>
+        <div class="step-guide-item">
+          <div class="step-num">3</div>
+          <div>
+            <strong>The call is forwarded to your Twilio number.</strong> Twilio connects the caller to your AI Voice Agent. Bella answers and handles the conversation.
+          </div>
+        </div>
+        <div class="step-guide-item">
+          <div class="step-num">4</div>
+          <div>
+            <strong>After the call ends:</strong> The AI generates a summary of what the caller said and sends it to your phone via SMS. You see exactly who called, what they wanted, and how the AI replied!
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
   <script>
@@ -922,12 +1207,14 @@
     const modeWsBtn = document.getElementById('modeWsBtn');
     const modeHttpBtn = document.getElementById('modeHttpBtn');
     const modePhoneBtn = document.getElementById('modePhoneBtn');
+    const modeMobileBtn = document.getElementById('modeMobileBtn');
     const testVoiceBtn = document.getElementById('testVoiceBtn');
     const pipelineProtocolInfo = document.getElementById('pipelineProtocolInfo');
 
     // Phone Studio Elements
     const chatStudio = document.getElementById('chatStudio');
     const phoneStudio = document.getElementById('phoneStudio');
+    const mobileStudio = document.getElementById('mobileStudio');
     const phoneBadge = document.getElementById('phoneBadge');
     const twilioStatusBadge = document.getElementById('twilioStatusBadge');
     const webhookUrlText = document.getElementById('webhookUrlText');
@@ -945,6 +1232,19 @@
     const outboundPhoneInput = document.getElementById('outboundPhoneInput');
     const outboundCallBtn = document.getElementById('outboundCallBtn');
     const outboundStatusMsg = document.getElementById('outboundStatusMsg');
+
+    // Stage 5: Mobile Setup Elements
+    const fwdTimerSelect = document.getElementById('fwdTimerSelect');
+    const fwdTwilioNumber = document.getElementById('fwdTwilioNumber');
+    const fwdEnableCode = document.getElementById('fwdEnableCode');
+    const copyFwdCodeBtn = document.getElementById('copyFwdCodeBtn');
+    const carrierGrid = document.getElementById('carrierGrid');
+    const smsPersonalNumber = document.getElementById('smsPersonalNumber');
+    const testSmsSummaryBtn = document.getElementById('testSmsSummaryBtn');
+    const smsTestResult = document.getElementById('smsTestResult');
+    const callHistoryContainer = document.getElementById('callHistoryContainer');
+    const callCounterBadge = document.getElementById('callCounterBadge');
+    const refreshHistoryBtn = document.getElementById('refreshHistoryBtn');
 
     // Telemetry display elements
     const metricTtfa = document.getElementById('metricTtfa');
@@ -1584,28 +1884,40 @@
       modeWsBtn.classList.remove('active');
       modeHttpBtn.classList.remove('active');
       modePhoneBtn.classList.remove('active');
+      modeMobileBtn.classList.remove('active');
 
       if (newMode === 'websocket') {
         modeWsBtn.classList.add('active');
         chatStudio.style.display = 'block';
         phoneStudio.style.display = 'none';
+        mobileStudio.style.display = 'none';
         pipelineProtocolInfo.innerHTML = '⚡ WebSocket Stream: <code>ws://localhost:3000/ws/voice</code> • Sub-500ms Pipelined TTFA';
       } else if (newMode === 'http') {
         modeHttpBtn.classList.add('active');
         chatStudio.style.display = 'block';
         phoneStudio.style.display = 'none';
+        mobileStudio.style.display = 'none';
         pipelineProtocolInfo.innerHTML = '📦 Batch HTTP Pipeline: <code>POST /voice-chat</code> • Standard Response';
       } else if (newMode === 'phone') {
         modePhoneBtn.classList.add('active');
         chatStudio.style.display = 'none';
         phoneStudio.style.display = 'flex';
+        mobileStudio.style.display = 'none';
         pipelineProtocolInfo.innerHTML = '📞 Twilio Phone Line Stream: <code>ws://localhost:3000/twilio/media-stream</code> • G.711 μ-law (8kHz)';
+      } else if (newMode === 'mobile') {
+        modeMobileBtn.classList.add('active');
+        chatStudio.style.display = 'none';
+        phoneStudio.style.display = 'none';
+        mobileStudio.style.display = 'flex';
+        pipelineProtocolInfo.innerHTML = '📱 Mobile Call Forwarding: GSM CFNR → Twilio → AI Agent → SMS Summary to your phone';
+        loadCallHistory();
       }
     }
 
     modeWsBtn.addEventListener('click', () => switchMode('websocket'));
     modeHttpBtn.addEventListener('click', () => switchMode('http'));
     modePhoneBtn.addEventListener('click', () => switchMode('phone'));
+    modeMobileBtn.addEventListener('click', () => switchMode('mobile'));
 
     // G.711 μ-law Web Audio Decoder (plays 8kHz μ-law audio through browser audio context)
     function decodeMulawToAudioBuffer(base64Mulaw, sampleRate = 8000) {
@@ -1765,6 +2077,153 @@
       }
     });
 
+    // ==============================================
+    // Stage 5: Mobile Setup & Call Forwarding Logic
+    // ==============================================
+
+    let forwardingData = null;
+
+    // Load forwarding setup data from server
+    async function loadForwardingSetup() {
+      try {
+        const res = await fetch('/api/forwarding/setup');
+        forwardingData = await res.json();
+
+        fwdTwilioNumber.textContent = forwardingData.twilioNumber;
+        updateForwardingCode();
+      } catch (err) {
+        console.warn('Forwarding setup fetch warning:', err);
+      }
+    }
+
+    // Update the displayed forwarding code based on timer and carrier
+    function updateForwardingCode() {
+      if (!forwardingData) return;
+      const seconds = fwdTimerSelect.value;
+      const twilioNum = forwardingData.twilioNumber;
+
+      // Get the active carrier
+      const activeCarrier = document.querySelector('.carrier-chip.active');
+      const carrierKey = activeCarrier ? activeCarrier.dataset.carrier : 'universal_gsm';
+      const carrier = forwardingData.carriers[carrierKey];
+
+      if (carrier && carrier.enable) {
+        // Replace the timer seconds in the code
+        let code = `*61*${twilioNum}**${seconds}#`;
+        // T-Mobile and AT&T use a different format
+        if (carrierKey === 'tmobile' || carrierKey === 'att') {
+          code = `*61*${twilioNum}*11*${seconds}#`;
+        }
+        fwdEnableCode.textContent = code;
+      }
+    }
+
+    fwdTimerSelect.addEventListener('change', updateForwardingCode);
+
+    // Carrier chip selection
+    carrierGrid.addEventListener('click', (e) => {
+      const chip = e.target.closest('.carrier-chip');
+      if (!chip) return;
+      document.querySelectorAll('.carrier-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      updateForwardingCode();
+    });
+
+    // Copy forwarding code
+    copyFwdCodeBtn.addEventListener('click', () => {
+      const code = fwdEnableCode.textContent.trim();
+      navigator.clipboard.writeText(code).then(() => {
+        copyFwdCodeBtn.textContent = '✅ Copied!';
+        setTimeout(() => { copyFwdCodeBtn.textContent = '📋 Copy'; }, 2000);
+      });
+    });
+
+    // Test SMS Summary Button
+    testSmsSummaryBtn.addEventListener('click', async () => {
+      testSmsSummaryBtn.disabled = true;
+      testSmsSummaryBtn.textContent = '⏳ Sending...';
+      smsTestResult.style.display = 'block';
+      smsTestResult.style.color = '#38bdf8';
+      smsTestResult.textContent = 'Sending test SMS...';
+
+      try {
+        const res = await fetch('/api/calls/test-summary-sms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          smsTestResult.style.color = '#34d399';
+          smsTestResult.textContent = '✅ ' + data.message;
+        } else {
+          smsTestResult.style.color = '#f87171';
+          smsTestResult.textContent = '⚠️ ' + (data.error || data.message);
+        }
+      } catch (err) {
+        smsTestResult.style.color = '#f87171';
+        smsTestResult.textContent = '❌ ' + err.message;
+      } finally {
+        testSmsSummaryBtn.disabled = false;
+        testSmsSummaryBtn.textContent = '📩 Send Test SMS Summary';
+      }
+    });
+
+    // Load and display call history
+    async function loadCallHistory() {
+      try {
+        const res = await fetch('/api/calls/history');
+        const data = await res.json();
+
+        callCounterBadge.textContent = `📞 ${data.totalCalls} calls`;
+
+        if (data.calls.length === 0) {
+          callHistoryContainer.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-icon">📞</div>
+              <div>No calls yet</div>
+              <div style="font-size: 0.75rem; margin-top: 4px;">Set up call forwarding above to start receiving calls!</div>
+            </div>`;
+          return;
+        }
+
+        let html = '<div class="call-history-list">';
+        data.calls.forEach((call, idx) => {
+          const time = new Date(call.startTime).toLocaleString('en-US', {
+            month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit', hour12: true
+          });
+          const duration = call.durationSeconds >= 60
+            ? `${Math.floor(call.durationSeconds / 60)}m ${call.durationSeconds % 60}s`
+            : `${call.durationSeconds}s`;
+
+          html += `
+            <div class="call-record">
+              <div class="call-record-header">
+                <span style="font-weight: 700; color: #f8fafc;">📞 ${escapeHtml(call.callerNumber)}</span>
+                <span class="badge ${call.smsSent ? 'badge-green' : 'badge-yellow'}">${call.smsSent ? '✅ SMS Sent' : '⚠️ No SMS'}</span>
+              </div>
+              <div class="call-record-summary">${escapeHtml(call.summary)}</div>
+              <div class="call-record-meta">
+                ⏰ ${time} • ⏱️ ${duration}${call.forwardedFrom ? ' • 📱 Forwarded from ' + escapeHtml(call.forwardedFrom) : ''}
+              </div>
+              ${call.transcript && call.transcript.length > 0 ? `
+                <button class="transcript-toggle" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'; this.textContent = this.textContent.includes('Show') ? '▼ Hide Transcript' : '▶ Show Transcript';">▶ Show Transcript</button>
+                <div class="call-record-transcript" style="display: none;">
+                  ${call.transcript.map(t => `<div style="margin-bottom: 4px;"><strong style="color: ${t.role === 'user' ? '#38bdf8' : '#c084fc'};">${t.role === 'user' ? '👤 Caller' : '🤖 AI'}:</strong> ${escapeHtml(t.text)}</div>`).join('')}
+                </div>
+              ` : ''}
+            </div>`;
+        });
+        html += '</div>';
+        callHistoryContainer.innerHTML = html;
+      } catch (err) {
+        console.warn('Call history fetch warning:', err);
+      }
+    }
+
+    refreshHistoryBtn.addEventListener('click', loadCallHistory);
+
     // Initial Health and Status Check
     async function initAgent() {
       try {
@@ -1832,6 +2291,20 @@
         } catch (twErr) {
           console.warn('Twilio status fetch warning:', twErr);
         }
+
+        // Stage 5: Load forwarding setup & personal number
+        if (healthRes.stage5) {
+          if (healthRes.stage5.personalPhoneConfigured) {
+            smsPersonalNumber.textContent = healthRes.stage5.personalPhone;
+          } else {
+            smsPersonalNumber.textContent = 'Not configured (add PERSONAL_PHONE_NUMBER to .env)';
+            smsPersonalNumber.style.color = '#f87171';
+          }
+          callCounterBadge.textContent = `📞 ${healthRes.stage5.callHistoryCount} calls`;
+        }
+
+        // Load forwarding codes
+        loadForwardingSetup();
 
       } catch (e) {
         console.warn('Backend init check warning:', e);

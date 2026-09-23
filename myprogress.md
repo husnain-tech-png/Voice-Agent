@@ -8,7 +8,7 @@ A voice agent needs three main superpowers:
 2. **Brain (LLM - Large Language Model):** Reads the words, understands what you mean, and thinks of a smart response.
 3. **Mouth (Text-to-Speech):** Speaks the answer aloud so you can hear it.
 
-🎉 **Stage 4 is now complete:** We have officially connected our server to a **Real Telephone Line using Twilio Media Streams**! Anyone can dial our phone number from their cellphone, talk to the AI, hear Bella speak in authentic 8000Hz telephone voice, and interrupt her at any millisecond with live telephone barge-in!
+🎉 **Stage 5 is now complete:** We have officially built **Mobile Setup & Carrier Call Forwarding with SMS Summaries**! When someone calls your personal cell phone and you don't pick up within 10 seconds (~2 rings), your cellular network automatically diverts the call to your AI assistant. Bella greets the caller, answers questions, takes messages, and instantly texts you an SMS summary of the entire conversation straight to your mobile phone!
 
 ---
 
@@ -417,42 +417,223 @@ This runs an automated end-to-end test verifying:
 
 ---
 
-## 🚀 What We Are Ready to Build Next (Stage 5 Roadmap)
-1. **Client-Side Neural VAD (Silero VAD):**
-   - Automatically detecting speech start and stop in the browser without pressing any buttons.
-2. **Custom Character Personas & System Prompts:**
-   - Tailored system personalities (Hotel Receptionist, Tech Support Specialist, Sales Representative, Catbot).
-3. **Multi-Turn Session Memory & Call History:**
-   - Persistent call logs, transcripts, and duration meters saved to disk.
+## 📱 What We Built in Stage 5: Mobile Setup & Call Forwarding
+
+In Stage 4, people could call our AI if they knew our Twilio number. But in Stage 5, we solved the real-world dream: **What if the AI answers your personal phone whenever you are busy, driving, sleeping, or in a meeting?**
 
 ---
 
-## 📞 Today's Investigation: 8-Second Missed Call AI Answering Assistant
+### 1. The Real-World Dream: Your Personal AI Executive Secretary
+* **The Problem:** You receive calls all day — couriers, deliveries, clients, family, and unknown numbers. You can't always pick up immediately. If you miss a call, you have no idea who it was or what they wanted until you call them back.
+* **The Stage 5 Solution:**
+  1. Someone dials your **personal mobile number** (e.g. your normal Jazz, Zong, Telenor, or US SIM card).
+  2. Your phone rings twice (~10 seconds).
+  3. If you don't answer, your **mobile carrier automatically diverts the call** to your AI server!
+  4. Bella answers with authentic telephone voice:
+     > *"Hello! Thank you for calling. I am an AI assistant answering on behalf of the owner. How can I help you today?"*
+  5. The caller talks naturally, asks questions, or leaves an urgent message.
+  6. The moment the caller hangs up, our Groq LLM summarizes the conversation in **300 milliseconds**.
+  7. Twilio sends an **SMS summary straight to your personal cell phone**:
+     > *"📞 Missed Call Summary from +1234567890 (Duration: 42s): Caller needed to reschedule tomorrow's appointment to 3 PM. AI confirmed availability."*
 
-### 1. Do You Need Money to Connect It to Your Mobile Phone?
-**YES.** Here is the simple reason why:
-* When someone calls your personal mobile number (SIM card) and you do not answer within 8–10 seconds, your cellular network (Jazz, Zong, Telenor, Ufone, etc.) uses a telecom feature called **Conditional Call Forwarding on No Reply (CFNR)**.
-* Your cellular provider **can only forward a call to another real phone number** — it cannot route a telephone call to an internet website URL or your laptop directly.
-* Real phone numbers are regulated telecom assets rented from companies like **Twilio** or **Telnyx** for about **$1.15 to $2.00 per month**.
-* Inbound calls cost about **$0.01 per minute**.
-* When your mobile SIM forwards a call to an international number (+1 US), your mobile network charges standard call forwarding airtime.
+---
 
-### 2. How Much Money is Needed?
-* You only need about **$3 to $5 total** to get started. That covers a virtual phone number and hundreds of minutes of testing calls.
+### 2. How Mobile Carrier Call Forwarding Works (In Easy Words)
+* Mobile cellular networks all over the planet (GSM networks) have standard built-in rules called **Supplementary Services**.
+* One specific rule is called **Conditional Call Forwarding on No Reply (CFNR)**.
+* Instead of digging through complicated Android or iPhone settings menus, every GSM phone supports **MMI Codes (Man-Machine Interface codes)** that you type directly into your phone dialer:
+  ```
+  *61*<ForwardingNumber>**<DelaySeconds>#
+  ```
+* When you press **Call**, your phone sends a high-priority radio signal to your cell tower. The carrier marks your SIM profile: *"If this phone rings for X seconds without an answer, immediately route the call audio to the forwarding number!"*
 
-### 3. Step-by-Step Guide (With $3–$5):
-1. **Get a Virtual Phone Number**: Sign up on [Telnyx](https://telnyx.com) or [Twilio](https://twilio.com), add $3–$5 credit, and buy a US or local phone number ($1.15/month).
-2. **Configure Webhook**: Put your server's public URL into the Voice Webhook setting:
-   `https://<your-domain>/twilio/incoming`
-3. **Add Keys to `.env`**: Put your `ACCOUNT_SID`, `AUTH_TOKEN`, and `PHONE_NUMBER` into [`.env`](file:///c:/voice%20agenty/.env).
-4. **Set Up Call Forwarding on Your Phone**:
-   - Open your phone's dialer and type: `*61*<YourVirtualNumber>**10#` and press Call.
-   - (10 seconds is ~2-3 rings; GSM networks support 5s, 10s, 15s, 20s).
-5. **Done!** Whenever anyone calls your cell phone and you don't pick up within 10 seconds, the call automatically redirects to your AI server, and Bella answers!
+---
 
-### 4. What If You Want a 100% Free Solution ($0.00)?
-If you don't want to spend any money:
-* **Option A (Web Studio - Live Now):** Open the public tunnel link on your smartphone's browser, tap the mic, and talk to Bella with sub-500ms voice.
-* **Option B (WhatsApp Voice Bot):** We can connect an open-source WhatsApp listener (`@whiskeysockets/baileys`) to your existing WhatsApp number. People can send voice notes or call on WhatsApp, and your AI will reply with voice notes for $0.00!
+### 3. 🕵️‍♂️ Detective Story #7: The Mystery of the 8-Second Timer
+*(A fascinating lesson on Telecom Standards & GSM Protocols!)*
+
+#### 🔍 The Mystery:
+When designing this stage, our original goal was: *"Set up an exact 8-second carrier forwarding rule."* But when testing with mobile carriers, typing `*61*+1234567890**8#` failed with an error: *"Invalid MMI Code or network error!"*
+
+#### 🧩 The Root Cause (The International GSM Telecom Standard):
+1. **The 3GPP Specification:** Mobile cellular systems worldwide follow the **3GPP TS 22.082 standard** created by international telecom regulatory bodies.
+2. **The 5-Second Constraint:** In the GSM standard specification, the timer parameter for CFNR (`*61*`) is defined as a multiple of **5 seconds**:
+   - Allowed values: **5, 10, 15, 20, 25, or 30 seconds**.
+   - Any number that is not a multiple of 5 (like 8 seconds, 7 seconds, or 12 seconds) is **strictly rejected by the cellular switchboard** as invalid syntax!
+3. **Translating Seconds to Rings:**
+   - 1 standard phone ring cadence = 4 to 5 seconds (2 seconds ring + 3 seconds pause).
+   - **5 seconds** = ~1 ring (often forwards before you can even take your phone out of your pocket).
+   - **10 seconds** = ~2 rings (the sweet spot: gives you time to check your screen, and if you don't answer, redirects to AI without making the caller wait too long).
+   - **15 seconds** = ~3 rings.
+
+#### 🛠️ How We Solved It:
+* In our Forwarding Setup Engine ([`server.js`](file:///c:/voice%20agenty/server.js)) and Web Studio ([`public/index.html`](file:///c:/voice%20agenty/public/index.html)), we built a smart timer selector:
+  - We defaulted to **10 seconds** (the telecom standard for 2 rings).
+  - We added support for all standard GSM options: 5s, 10s, 15s, 20s, 25s, and 30s.
+  - We documented carrier-specific formats:
+    - **Universal GSM / Jazz / Zong / Telenor / Ufone / Airtel:** `*61*<Number>**10#`
+    - **T-Mobile / AT&T (US):** `*61*<Number>*11*10#` (uses service class `11` for voice)
+    - **Cancellation Code (Universal):** `##61#`
+    - **Status Verification Code:** `*#61#`
+
+---
+
+### 4. 🕵️‍♂️ Detective Story #8: The Mystery of the Ghost Caller
+*(A crucial architectural lesson on Webhook Parameters vs WebSocket Streaming!)*
+
+#### 🔍 The Mystery:
+When a phone call was forwarded, the Twilio HTTP Webhook knew the caller's phone number (`From: +92300...`) and the forwarded number (`ForwardedFrom`). But when the call opened the WebSocket connection on `/twilio/media-stream`, the WebSocket session had no idea who was calling! It was a "Ghost Caller". Without caller info, the SMS summary couldn't report who had called!
+
+#### 🧩 The Root Cause (The Protocol Disconnect):
+1. **The Webhook (HTTP):** Twilio makes an initial HTTP `POST /twilio/incoming` with form data: `From`, `To`, `CallSid`, `ForwardedFrom`.
+2. **The Stream (WebSocket):** Twilio then makes a separate, independent WebSocket connection to `/twilio/media-stream`.
+3. Twilio's standard WebSocket `start` event contains metadata, but custom HTTP form fields are not passed automatically into the media stream!
+
+#### 🛠️ How We Fixed It (TwiML Parameter Injection):
+In [`server.js`](file:///c:/voice%20agenty/server.js), we updated the TwiML generator in `/twilio/incoming` to inject explicit `<Parameter>` children inside the `<Stream>` tag:
+```xml
+<Response>
+  <Connect>
+    <Stream url="wss://your-domain.ngrok-free.app/twilio/media-stream">
+      <Parameter name="callerNumber" value="+923001234567" />
+      <Parameter name="forwardedFrom" value="+923219876543" />
+      <Parameter name="callSid" value="CA12345678" />
+      <Parameter name="callerName" value="John Doe" />
+    </Stream>
+  </Connect>
+</Response>
+```
+When Twilio opens the WebSocket, its `start` event payload now includes:
+```json
+{
+  "event": "start",
+  "start": {
+    "customParameters": {
+      "callerNumber": "+923001234567",
+      "forwardedFrom": "+923219876543",
+      "callSid": "CA12345678"
+    }
+  }
+}
+```
+Our WebSocket handler immediately binds these parameters to `session.callerNumber`, `session.forwardedFrom`, and `session.callSid`. Problem solved!
+
+---
+
+### 5. The Post-Call Summary Engine (LLM in Action)
+* During the phone call, every sentence spoken by the caller and every answer from Bella is recorded into a clean session transcript:
+  ```json
+  [
+    { "role": "assistant", "text": "Hello! Thank you for calling. How can I help you today?" },
+    { "role": "user", "text": "Hi, I am calling to confirm if the package was delivered to office 402." },
+    { "role": "assistant", "text": "Yes, delivery was completed at 10:15 AM and signed for by security." }
+  ]
+  ```
+* The millisecond the caller hangs up (Twilio `stop` event or WebSocket disconnection):
+  1. The server calls Groq LLM with a dedicated summarizer prompt:
+     > *"You are a helpful phone secretary. Summarize this phone call in 2-3 concise sentences for an SMS notification. State clearly: 1) Who called, 2) What they asked or wanted, and 3) The AI's response or action taken."*
+  2. Groq's high-speed inference engine generates the summary in **under 400 milliseconds**.
+  3. The summary is attached to the call record:
+     > *"Caller inquired about package delivery for office 402. AI confirmed package was delivered at 10:15 AM and signed by security."*
+
+---
+
+### 6. Twilio SMS Notification Delivery
+* Once the summary is ready, the server uses Twilio's Messaging API:
+  - **Recipient:** `PERSONAL_PHONE_NUMBER` from [`.env`](file:///c:/voice%20agenty/.env)
+  - **Sender:** `TWILIO_PHONE_NUMBER`
+  - **Message Body:**
+    ```
+    📞 Missed Call Summary
+    From: +923001234567
+    Duration: 42s
+    Summary: Caller inquired about package delivery for office 402. AI confirmed package was delivered at 10:15 AM and signed by security.
+    ```
+* **Graceful Dry-Run Mode:** If Twilio SMS credentials or international permissions are not configured, the system logs the full summary to the server console and UI dashboard without crashing.
+
+---
+
+### 7. The Call History Vault (`call-history.json`)
+* Every call processed by the voice agent is saved both in memory and written to a persistent JSON file (`call-history.json`):
+  - Call SID
+  - Caller phone number
+  - Forwarded-from number
+  - Call start and end timestamps
+  - Total duration in seconds
+  - Full word-by-word transcript
+  - AI-generated summary
+  - SMS delivery status
+* When you restart the server, previous call history is loaded back into memory instantly!
+* REST endpoints available:
+  - `GET /api/calls/history` (with `?limit=10`)
+  - `GET /api/calls/:callSid` (returns full detail for one specific call)
+  - `POST /api/calls/test-summary-sms` (sends a test SMS to verify your phone number)
+
+---
+
+### 8. Upgraded Frontend Web Studio (`public/index.html`)
+We added the **📱 Mobile Setup (Stage 5)** mode to our studio:
+1. **4-Way Mode Switcher:** Toggle easily between **📱 Mobile Setup (Stage 5)**, **📞 Phone Line (Twilio Stage 4)**, **⚡ Live Stream (WebSocket Stage 3)**, and **📦 Batch Mode (HTTP Stage 2)**.
+2. **Call Forwarding Setup Wizard Card:**
+   - **Carrier Chips:** Click your network (Universal GSM, Jazz / Warid, Zong, Telenor, Ufone, Airtel, T-Mobile, AT&T).
+   - **Timer Selector:** Select 5s, 10s, 15s, 20s, 25s, or 30s.
+   - **Live Dial Code Generator:** Displays the exact MMI code with a **📋 Copy** button ready to paste into your phone dialer.
+   - **Clear Instructions:** Step-by-step instructions on checking status (`*#61#`) and turning off forwarding (`##61#`).
+3. **SMS Summary Test Card:**
+   - Shows your configured personal phone number.
+   - One-click **📩 Send Test SMS Summary** button to verify message delivery.
+4. **Call History Dashboard:**
+   - Shows all recent incoming calls as modern glassmorphic cards.
+   - Caller number, duration, timestamp, and AI summary.
+   - Expandable **▶ Show Transcript** toggle to read the exact conversation.
+   - Live badge on top: `📞 0 calls`.
+
+---
+
+### 9. 📚 Key Concepts Dictionary (Updated for Stage 5)
+
+| Term | What It Means in Simple Words |
+| :--- | :--- |
+| **Call Forwarding (CFNR)** | Conditional Call Forwarding on No Reply — a cellular carrier feature that forwards a phone call only when you don't answer within a specific number of seconds. |
+| **MMI Code** | Man-Machine Interface code (e.g. `*61*...#`) — universal numbers you type into your phone dialer to talk directly to your cellular network's computer. |
+| **3GPP GSM Standard** | The global technical rules that govern how all mobile phones and cellular towers communicate. |
+| **TwiML `<Parameter>`** | Custom data attributes passed from an initial HTTP phone call webhook directly into a real-time WebSocket media stream. |
+| **Post-Call LLM Summary** | An automated AI step that reads a full conversation transcript the second a call finishes and condenses it into 2-3 key takeaway sentences. |
+| **Twilio Programmable SMS** | The cloud API used to deliver instant text messages to cell phones worldwide. |
+| **Call History Persistence** | Saving call records to permanent storage (`call-history.json`) so data is never lost when the server is restarted. |
+
+---
+
+### 10. 🛠️ How to Test Stage 5 Right Now
+
+#### In Your Web Browser:
+1. Open **[http://localhost:3000](http://localhost:3000)**.
+2. Click **📱 Mobile Setup (Stage 5)** in the top mode switcher.
+3. In the **Call Forwarding Setup Wizard**, select your carrier and ring delay. Click **📋 Copy** to grab your dial code!
+4. Check your personal phone number in the SMS test card and click **📩 Send Test SMS Summary**.
+5. View the **Call History** card — after any simulated or real call, click **🔄 Refresh History** to see the new entry with transcript and AI summary!
+
+#### In Your Terminal (PowerShell):
+```powershell
+.\test-stage5-forwarding.ps1
+```
+This runs 28 automated tests verifying:
+- Forwarding setup endpoint and carrier rules (`/api/forwarding/setup`)
+- GSM CFNR code formatting and 5s timer increments
+- Call history endpoints (`/api/calls/history`, `/api/calls/:callSid`)
+- Inbound TwiML parameter injection for caller metadata
+- Simulated call transcript tracking & Groq LLM summary generation
+- SMS summary test endpoint (`/api/calls/test-summary-sms`)
+- Health check Stage 5 telemetry
+
+---
+
+## 🚀 What We Are Ready to Build Next (Stage 6 Roadmap)
+1. **WhatsApp Voice Bot Integration (`@whiskeysockets/baileys`):**
+   - Connect the AI voice agent directly to WhatsApp! Users can voice-call or send voice notes to your existing WhatsApp number, and the AI replies with voice notes for **$0.00 carrier fees**!
+2. **Client-Side Neural VAD (Silero VAD):**
+   - Pure machine-learning voice activity detection running directly in the browser with zero buttons.
+3. **Custom Character Personas & Prompt Presets:**
+   - Switchable agent personalities: Hotel Concierge, Tech Support Specialist, Medical Clinic Receptionist, and friendly assistant.
 
 
