@@ -628,6 +628,100 @@ This runs 28 automated tests verifying:
 
 ---
 
+## 📱 Complete Practical Guide: Connecting Your Phone Number (03154483615 / Zong Pakistan) to the Voice Agent
+
+Here is the exact, easy, step-by-step guide to have our Voice Agent answer incoming phone calls on your behalf when someone calls your personal mobile number **`03154483615`**!
+
+---
+
+### 🌟 How It Works (The 30-Second Explanation)
+1. **The Dial:** Someone calls your personal mobile number (`03154483615`).
+2. **The Wait:** Your phone rings normally for **10 seconds** (~2 rings).
+3. **The Divert:** If you are busy, driving, sleeping, or in a meeting and don't pick up, your mobile network (**Zong**) automatically forwards the audio of the call to your Twilio virtual number.
+4. **The AI Answers:** Bella answers politely in real-time voice:
+   > *"Hello! Thank you for calling Husnain. I am an AI assistant answering on his behalf. How can I help you today?"*
+5. **The Conversation:** The caller speaks naturally, asks questions, or leaves an urgent message.
+6. **The Summary:** The second the call finishes, Groq LLM summarizes the conversation and Twilio sends an **SMS summary straight to `03154483615`**:
+   > *"📞 Missed Call Summary from +92300xxxxxxx (Duration: 35s): Caller asked about project deadline. AI replied that work is on track."*
+
+---
+
+### 📋 4 Easy Steps to Connect `03154483615`
+
+#### Step 1: Get a Twilio Virtual Number (~$1.15/month)
+* **Why do we need this?** Cellular networks (like Zong) cannot forward calls directly to an internet URL or website. They can only forward a phone call to another real telephone number.
+1. Sign up or log into [console.twilio.com](https://console.twilio.com).
+2. Go to **Phone Numbers** ➡️ **Manage** ➡️ **Buy a Number**.
+3. Buy a US Toll-Free or local number (costs ~$1.15/month) — make sure it has **Voice** capability checked.
+4. Note your **Account SID**, **Auth Token**, and your new **Twilio Phone Number** (e.g. `+14155550199`).
+5. Open your [`.env`](file:///c:/voice%20agenty/.env) file and fill in:
+   ```env
+   TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   TWILIO_AUTH_TOKEN=your_twilio_auth_token_here
+   TWILIO_PHONE_NUMBER=+14155550199
+   PERSONAL_PHONE_NUMBER=+923154483615
+   ```
+
+#### Step 2: Make Your Computer Publicly Reachable (Tunnel)
+1. In a new PowerShell terminal, run:
+   ```powershell
+   ngrok http 3000
+   ```
+   *(Or run `cloudflared tunnel --url http://localhost:3000` or use the active Serveo URL).*
+2. Copy the public `https://...` address.
+3. In your [`.env`](file:///c:/voice%20agenty/.env) file, update:
+   ```env
+   PUBLIC_URL=https://your-domain.ngrok-free.app
+   ```
+
+#### Step 3: Set the Webhook in Twilio Console
+1. Go to [console.twilio.com](https://console.twilio.com) ➡️ **Phone Numbers** ➡️ **Active Numbers**.
+2. Click on your Twilio phone number.
+3. Scroll down to the **Voice Configuration** section:
+   - Under **"A CALL COMES IN"**, choose **Webhook**.
+   - Set the method to **HTTP POST**.
+   - In the URL box, paste:
+     ```
+     https://your-domain.ngrok-free.app/twilio/incoming
+     ```
+   - Click the blue **Save Configuration** button at the bottom!
+
+#### Step 4: Dial the Zong MMI Code on Your Phone (`03154483615`)
+Now take your mobile phone with your **03154483615** SIM card, open the **Phone / Dialer app**, and dial:
+
+```
+*61*<YourTwilioNumber>**10#
+```
+
+> **Real Example:** If your Twilio number is `+14155550199`, you dial:  
+> `*61*+14155550199**10#` and press the green **Call** button!
+
+Your screen will display a carrier notification:
+> *"Call forwarding when unanswered registered successfully"*
+
+🎉 **That's it! Your AI answering assistant is now 100% active on 03154483615!**
+
+---
+
+### 🕹️ Useful Quick Codes for Your Phone (Zong / GSM)
+
+| Action | MMI Code to Dial on `03154483615` | Description |
+| :--- | :--- | :--- |
+| **Enable 10-Second Answering** | `*61*<TwilioNumber>**10#` | Rings your phone for 10 seconds (~2 rings), then AI answers. |
+| **Enable Immediate Answering** | `*21*<TwilioNumber>#` | Forwards **ALL** calls immediately to AI without ringing your phone (e.g. for meetings/sleep). |
+| **Turn Off Unanswered Forwarding** | `##61#` | Restores normal unanswered calling back to your voicemail or default. |
+| **Turn Off All Forwarding** | `##002#` | Cancels ALL forwarding rules completely and restores factory default. |
+| **Check Current Forwarding Status** | `*#61#` | Shows which number calls are currently being forwarded to. |
+
+---
+
+### ⚠️ Important Carrier Note (Pakistan SIMs)
+* When Zong forwards a call to an international number (+1 US), Zong will charge standard international call forwarding airtime from your mobile credit balance.
+* **Pro Tip:** Make sure your `03154483615` SIM has a small amount of call credit (Rs. 50–100) or an international calling bucket active so Zong permits the call divert.
+* **100% Free Zero-Cost Alternative (Stage 6):** If you don't want to pay any carrier forwarding airtime, our upcoming **Stage 6 WhatsApp Voice Bot** connects directly to WhatsApp on `03154483615`. Anyone can call or send voice notes on WhatsApp, and the AI will answer for **$0.00**!
+
+---
+
 ## 🚀 What We Are Ready to Build Next (Stage 6 Roadmap)
 1. **WhatsApp Voice Bot Integration (`@whiskeysockets/baileys`):**
    - Connect the AI voice agent directly to WhatsApp! Users can voice-call or send voice notes to your existing WhatsApp number, and the AI replies with voice notes for **$0.00 carrier fees**!

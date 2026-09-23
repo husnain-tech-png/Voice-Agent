@@ -270,17 +270,23 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 
 ---
 
-## 📱 How to Connect Your Real Phone Number (Step-by-Step)
+## 📱 How to Connect Your Real Phone Number (03154483615 / Zong Pakistan)
 
-### Step 1: Carrier Call Forwarding Setup
-1. Look up your Twilio virtual number (e.g. `+12345678901`).
-2. Open your smartphone's dialer app.
-3. Type the MMI code for 10-second forwarding:
+### Step 1: Carrier Call Forwarding Setup on `03154483615`
+1. Look up your Twilio virtual number from `.env` (e.g. `+14155550199`).
+2. Open the dialer app on your phone with the **03154483615** SIM card.
+3. Type the Zong MMI code for 10-second unanswered forwarding:
    ```
-   *61*+12345678901**10#
+   *61*<YourTwilioNumber>**10#
    ```
-4. Press the **Call** button. Your screen will display: *"Call forwarding when unanswered registered successfully"*.
-5. (To turn off forwarding later, simply dial `##61#` and press Call).
+   *(Example: `*61*+14155550199**10#`)*
+4. Press the green **Call** button. Your screen will display:  
+   *"Call forwarding when unanswered registered successfully"*.
+5. **Control Codes on Zong:**
+   - **Cancel Unanswered Forwarding:** Dial `##61#` and press Call.
+   - **Cancel ALL Forwarding:** Dial `##002#` and press Call.
+   - **Forward ALL Calls Immediately (no ring):** Dial `*21*<YourTwilioNumber>#` (Cancel with `##21#`).
+   - **Check Status:** Dial `*#61#` and press Call.
 
 ### Step 2: Configure Environment Variables
 In your [`.env`](file:///c:/voice%20agenty/.env) file:
@@ -288,8 +294,8 @@ In your [`.env`](file:///c:/voice%20agenty/.env) file:
 PUBLIC_URL=https://your-domain.ngrok-free.app
 TWILIO_ACCOUNT_SID=your_account_sid
 TWILIO_AUTH_TOKEN=your_auth_token
-TWILIO_PHONE_NUMBER=+12345678901
-PERSONAL_PHONE_NUMBER=+923001234567
+TWILIO_PHONE_NUMBER=+14155550199
+PERSONAL_PHONE_NUMBER=+923154483615
 ```
 
 ### Step 3: Configure Twilio Console Webhook
@@ -302,11 +308,16 @@ PERSONAL_PHONE_NUMBER=+923001234567
 4. Click **Save**.
 
 ### Step 4: Test Real Call Forwarding
-1. Have a friend or secondary phone call your personal mobile number.
+1. Have a friend or secondary phone dial your mobile number **`03154483615`**.
 2. Let it ring for 10 seconds without answering.
-3. Your mobile network will automatically divert the call to Twilio!
-4. Twilio opens the media stream to your server, and Bella greets the caller.
-5. After the caller hangs up, Groq generates a concise summary and Twilio texts it straight to your personal phone!
+3. Zong will automatically divert the call to Twilio!
+4. Twilio opens the live media stream to your server, and Bella greets the caller:
+   > *"Hello! Thank you for calling Husnain. I am an AI assistant answering on his behalf. How can I help you today?"*
+5. After the caller hangs up, Groq generates a 2-sentence summary and Twilio texts it straight to **`03154483615`** via SMS!
+
+### 💡 Pakistan Carrier Note (Zong Airtime)
+* Zong charges standard call forwarding airtime when diverting calls internationally. Ensure your `03154483615` SIM has a small balance (Rs. 50–100) or an IDD bucket active.
+* For $0.00 international carrier fees, **Stage 6 WhatsApp Voice Bot** connects directly to WhatsApp on `03154483615`!
 
 ---
 
