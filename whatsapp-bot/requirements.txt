@@ -1,0 +1,23 @@
+# ============================================
+# WhatsApp Voice Agent — Python Dependencies
+# ============================================
+# Install with: pip install -r requirements.txt
+
+# Web framework & ASGI server
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+
+# Async HTTP client (Meta Graph API calls)
+httpx==0.28.1
+
+# Groq SDK (Whisper STT + LLM generation)
+groq==0.25.0
+
+# Zero-cost Text-to-Speech (Microsoft Edge TTS)
+edge-tts==7.0.2
+
+# Environment variable loading
+python-dotenv==1.1.0
+
+# Multipart form support (file uploads to Meta)
+python-multipart==0.0.20
