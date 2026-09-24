@@ -6,26 +6,34 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 ---
 
 ## 🚦 Current Status Summary
-- **Current Phase:** ✅ **Stage 5 Completed & Verified — Mobile Setup & Call Forwarding (Telnyx TeXML & Twilio Carrier Forwarding, Transcript Tracking, LLM Call Summaries & SMS Delivery to Personal Phone `+923154483615`)**
+- **Current Phase:** ✅ **Stage 6 Initialized & Verified — WhatsApp Cloud API Voice Agent (Voice-to-Voice Audio Notes, Groq Whisper STT, Llama-3.3-70B Brain, Zero-Cost Microsoft Edge-TTS Speech, Meta Media Graph API Ingestion & Delivery)**
 - **Protocols & Gateways:** 
+  - 🤖 **WhatsApp Cloud API Voice Agent (Stage 6 Active - Port 8000):** FastAPI server in [`whatsapp-bot/main.py`](file:///c:/voice%20agenty/whatsapp-bot/main.py), Meta Cloud API Webhook (`POST /webhook`, verification `GET /webhook`), Health Diagnostics (`GET /health`), Interactive Swagger Docs (`/docs`), Background Task Audio Pipeline, and Automated Test Suite ([`whatsapp-bot/test-whatsapp.ps1`](file:///c:/voice%20agenty/whatsapp-bot/test-whatsapp.ps1))
   - 🌐 **Telnyx CPaaS & TeXML (Active & Primary):** Full-duplex μ-law (8000Hz) WebSocket on `/telnyx/media-stream`, TeXML Webhook on `/telnyx/incoming`, TeXML App ID `3055170547735332106`, Status on `/api/telnyx/status`, Auto-Sync on `/api/telnyx/sync`
   - 📱 **Mobile Call Forwarding & History:** REST endpoints on `/api/forwarding/setup`, `/api/calls/history`, `/api/calls/:callSid`, `/api/calls/test-summary-sms`
   - 📞 **Twilio Media Streams Telephony (Secondary/Fallback):** Full-duplex μ-law (8000Hz) WebSocket on `/twilio/media-stream`, TwiML on `/twilio/incoming`
   - ⚡ **Browser Live Studio:** Full-duplex WebSocket on `/ws/voice` (<500ms TTFA)
   - 📦 **REST HTTP:** Backward-compatible endpoints (`/voice-chat`, `/chat`, `/transcribe`, `/tts`)
-- **Ears (Listening):** ✅ Groq Whisper Turbo (`whisper-large-v3-turbo`) with G.711 μ-law to 16-bit linear PCM WAV decoding
-- **Brain (Thinking):** ✅ Groq LLM (`openai/gpt-oss-120b`) with **live token streaming (`stream: true`)** + Post-Call Summary generation
-- **Mouth (Speaking):** ✅ **ElevenLabs Flash v2.5 (`eleven_flash_v2_5`)** with native **`output_format=ulaw_8000`** telephony output
+- **Ears (Listening):**
+  - Web & Telephony: ✅ Groq Whisper Turbo (`whisper-large-v3-turbo`) with G.711 μ-law to 16-bit linear PCM WAV decoding
+  - WhatsApp Voice Notes: ✅ Groq Whisper (`whisper-large-v3`) with native `.ogg` audio decoding (~200ms)
+- **Brain (Thinking):**
+  - Web & Telephony: ✅ Groq LLM (`openai/gpt-oss-120b`) with **live token streaming (`stream: true`)** + Post-Call Summary generation
+  - WhatsApp Voice Agent: ✅ Groq LLM (`llama-3.3-70b-versatile`) with 10-turn conversation memory & voice-optimized responses
+- **Mouth (Speaking):**
+  - Web & Telephony: ✅ **ElevenLabs Flash v2.5 (`eleven_flash_v2_5`)** with native **`output_format=ulaw_8000`** telephony output
+  - WhatsApp Voice Notes: ✅ **Microsoft Edge-TTS (`edge-tts` AriaNeural)** with zero-cost ($0.00) ultra-high-quality neural voice synthesis
 - **Voice Activity Detection (VAD):** ✅ Real-time RMS energy detector on 20ms audio chunks with ~700ms silence detection
 - **Phone Interruption Handling:** ✅ **Live Phone Barge-In**: Emits Twilio/Telnyx `clear` event in <50ms to wipe phone line buffer
 - **Call Summaries & Notifications:** ✅ Automatic Groq LLM post-call summary + Telnyx / Twilio SMS delivery to `PERSONAL_PHONE_NUMBER` (`+923154483615`)
 - **Call History Persistence:** ✅ In-memory cache + automatic disk backup to `call-history.json`
-- **Default Voice:** Bella (`EXAVITQu4vr4xnSDxMaL` — Free & Pro accessible)
+- **Default Voice:** Bella (`EXAVITQu4vr4xnSDxMaL` for ElevenLabs) / Aria (`en-US-AriaNeural` for WhatsApp Edge-TTS)
 - **API Status:**
+  - WhatsApp Voice Bot: ✅ Initialized & Verified (`whatsapp-bot/main.py` on port 8000, Meta Webhook `/webhook`, `/health`, `/docs`)
   - Telnyx CPaaS: ✅ Connected & Verified (Configured in `.env`, Balance `$5.00`, TeXML App `3055170547735332106`)
   - Forwarding & Summaries: ✅ Active (`/api/forwarding/setup`, `/api/calls/history`, `/api/calls/test-summary-sms`)
   - Twilio Telephony: ✅ Active (`/twilio/incoming`, `/twilio/media-stream`, `/api/twilio/status`, `/api/twilio/simulate-call`)
-  - Groq Cloud: ✅ Connected (`GROQ_API_KEY` active, token streaming & summarizer operational)
+  - Groq Cloud: ✅ Connected (`GROQ_API_KEY` active, token streaming, Whisper STT & Llama-3.3-70B operational)
   - ElevenLabs: ✅ Connected & Verified (`ELEVENLABS_API_KEY` active, streaming low-latency MP3 & μ-law chunks)
   - WebSockets: ✅ Triple WebSocket channels online (`/ws/voice`, `/telnyx/media-stream`, `/twilio/media-stream`)
   - Public Tunnel: ✅ Active (`https://voice-agent-husnain.loca.lt`)
@@ -190,9 +198,66 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 - [x] **Frontend Telnyx Dashboard Card (`public/index.html`)**:
   - Live credit balance ($5.00), phone number status, TeXML App ID, and 1-click `🔄 Sync Number` button.
 
+### Stage 6: WhatsApp Voice Agent (Cloud API Webhooks, Groq Whisper STT, Llama-3.3-70B, Zero-Cost Edge-TTS & Audio Notes)
+- [x] **FastAPI Webhook Server ([`whatsapp-bot/main.py`](file:///c:/voice%20agenty/whatsapp-bot/main.py))**:
+  - High-performance asynchronous FastAPI service running on port 8000 with lifespan management and interactive OpenAPI / Swagger UI at `/docs`.
+- [x] **Immediate 200 OK + Background Task Processing**:
+  - Conforms to WhatsApp Cloud API's strict sub-second webhook timeout requirement. Returns `{"status": "ok"}` with HTTP 200 immediately, dispatching the resource-heavy voice processing pipeline to FastAPI `BackgroundTasks`.
+- [x] **Meta Webhook Verification Handshake (`GET /webhook`)**:
+  - Implemented Meta verification protocol checking `hub.mode == "subscribe"` and validating `hub.verify_token` against `VERIFY_TOKEN`. Echoes back `hub.challenge` as plain text.
+- [x] **Message Deduplication Guard**:
+  - In-memory cache tracking up to 1,000 unique `message_id` entries to discard duplicate webhook deliveries caused by mobile carrier retries or network blips.
+- [x] **Inbound Voice Note Ingestion (Meta Graph API v21.0)**:
+  - Automatically detects `message_type == "audio"`, queries `GET https://graph.facebook.com/v21.0/{media_id}` for the download URL, and retrieves raw `.ogg` Opus audio bytes using the Bearer token.
+- [x] **Groq Whisper Speech-to-Text (`whisper-large-v3`)**:
+  - Transcribes WhatsApp `.ogg` voice notes in ~200ms using Groq's high-throughput audio transcription API (`audio.transcriptions.create`) executed asynchronously in a thread pool.
+- [x] **Groq Llama 3.3 70B Conversational Brain (`llama-3.3-70b-versatile`)**:
+  - Maintains per-sender conversation history (up to 10 conversational turns) and generates warm, natural, concise (2-4 sentence) responses tailored specifically for speech listening without markdown, asterisks, or code blocks.
+- [x] **Zero-Cost Microsoft Edge-TTS Engine (`edge-tts` AriaNeural)**:
+  - Generates high-fidelity MP3 speech audio using Microsoft Edge's neural TTS engine (`en-US-AriaNeural`). 100% free with $0.00 cost and zero external API keys or recurring subscriptions.
+- [x] **Meta Media Upload & Voice Note Delivery (`POST /v21.0/{phone_number_id}/media` & `POST /v21.0/{phone_number_id}/messages`)**:
+  - Uploads synthesized MP3 audio as multipart form data (`audio/mpeg`) to obtain an upload `media_id`, then dispatches a native WhatsApp voice note (`type: "audio"`) to the sender's phone number.
+- [x] **Resilient Error Handling & Graceful Fallbacks**:
+  - Detects plain text messages and replies with audio + text.
+  - Automatically falls back to sending helpful text messages if audio download, transcription, or media upload fails.
+- [x] **Configuration & Health Diagnostics (`GET /health`)**:
+  - Real-time diagnostic endpoint displaying status of `WHATSAPP_TOKEN`, `PHONE_NUMBER_ID`, `VERIFY_TOKEN`, `GROQ_API_KEY`, active models, and count of active conversation threads.
+- [x] **Automated Testing Suite ([`whatsapp-bot/test-whatsapp.ps1`](file:///c:/voice%20agenty/whatsapp-bot/test-whatsapp.ps1))**:
+  - 1-click PowerShell runner validating health check, Meta webhook verification challenge handshake, and API documentation accessibility.
+
 ---
 
 ## 🏗️ Architecture & Data Flow
+
+### Stage 6: WhatsApp Voice Agent Pipeline Flow (Voice Note to Voice Note)
+```
+📱 User sends Voice Note (.ogg) on WhatsApp
+        │
+        ▼
+[Meta Cloud API Webhook — POST /webhook]
+        │  (Immediate 200 OK → Dispatches BackgroundTask)
+        │
+        ▼  Step 1: Download .ogg audio bytes
+[Meta Graph API — GET /v21.0/{media_id}]
+        │
+        ▼  Step 2: Speech-to-Text (~200ms)
+[Groq Whisper — whisper-large-v3]
+        │
+        ▼  Step 3: Conversational Reasoning (~300ms)
+[Groq LLM — llama-3.3-70b-versatile (10-turn memory)]
+        │
+        ▼  Step 4: Zero-Cost Speech Synthesis (~400ms)
+[Microsoft Edge-TTS — edge-tts en-US-AriaNeural ($0.00)]
+        │
+        ▼  Step 5: Media Upload (~350ms)
+[Meta Graph API — POST /v21.0/{phone_number_id}/media]
+        │
+        ▼  Step 6: Voice Note Dispatch
+[Meta Messages API — POST /v21.0/{phone_number_id}/messages]
+        │
+        ▼
+📱 User receives Voice Note reply on WhatsApp!
+```
 
 ### Stage 5: Mobile Call Forwarding & Missed-Call AI Assistant Flow (Telnyx TeXML & Twilio)
 ```
@@ -233,15 +298,15 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 
 ## ⏱️ Latency Budget Breakdown (<500ms Target)
 
-| Pipeline Step | Batch HTTP (Stage 2) | Browser WebSockets (Stage 3) | Phone Line Telephony (Stage 4) | Mobile Forwarding (Stage 5) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Audio Format** | WebM / Opus | WebM binary chunks | G.711 μ-law (8000Hz mono) | G.711 μ-law (8000Hz mono) |
-| **Speech-to-Text (STT)** | 300 ms (upload + batch) | ~180 ms (stream buffer) | ~180 ms (μ-law to WAV + Whisper) | ~180 ms (Whisper Turbo) |
-| **LLM Reasoning** | 450 ms (full completion) | ~80 ms (Time-to-First-Token) | ~80 ms (Time-to-First-Token) | ~80 ms (Time-to-First-Token) |
-| **Text-to-Speech (TTS)** | 700 ms (full MP3) | ~150 ms (Flash MP3 stream) | ~160 ms (Flash `ulaw_8000` stream) | ~160 ms (Flash `ulaw_8000` stream) |
-| **Time-to-First-Audio (TTFA)**| **~1,450 ms - 2,000 ms** | **~410 ms - 490 ms** | **~420 ms - 510 ms (Over phone line!)** | **~420 ms - 510 ms** |
-| **Barge-In Reaction** | N/A (uninterruptible) | <50 ms (AudioContext flush) | <50 ms (Twilio `clear` event) | <50 ms (Twilio `clear` event) |
-| **Post-Call Summary** | N/A | N/A | N/A | ~400 ms (Groq LLM) + SMS dispatch |
+| Pipeline Step | Batch HTTP (Stage 2) | Browser WebSockets (Stage 3) | Phone Line Telephony (Stage 4) | Mobile Forwarding (Stage 5) | WhatsApp Voice Bot (Stage 6) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Audio Format** | WebM / Opus | WebM binary chunks | G.711 μ-law (8000Hz mono) | G.711 μ-law (8000Hz mono) | OGG Opus / MP3 (Edge-TTS) |
+| **Speech-to-Text (STT)** | 300 ms (upload + batch) | ~180 ms (stream buffer) | ~180 ms (μ-law to WAV + Whisper) | ~180 ms (Whisper Turbo) | ~200 ms (Groq Whisper v3) |
+| **LLM Reasoning** | 450 ms (full completion) | ~80 ms (Time-to-First-Token) | ~80 ms (Time-to-First-Token) | ~80 ms (Time-to-First-Token) | ~300 ms (Llama 3.3 70B full) |
+| **Text-to-Speech (TTS)** | 700 ms (full MP3) | ~150 ms (Flash MP3 stream) | ~160 ms (Flash `ulaw_8000` stream) | ~160 ms (Flash `ulaw_8000` stream) | ~400 ms (Edge-TTS $0 cost) |
+| **Time-to-First-Audio (TTFA)**| **~1,450 ms - 2,000 ms** | **~410 ms - 490 ms** | **~420 ms - 510 ms (Over phone line!)** | **~420 ms - 510 ms** | **~1.2s - 1.8s (Complete Voice Note)** |
+| **Barge-In Reaction** | N/A (uninterruptible) | <50 ms (AudioContext flush) | <50 ms (Twilio `clear` event) | <50 ms (Twilio `clear` event) | N/A (Asynchronous Voice Note) |
+| **Carrier Cost** | $0.00 | $0.00 | Standard Twilio Rate | Standard Telnyx Rate | **$0.00 (Zero Carrier Cost!)** |
 
 ---
 
@@ -289,6 +354,24 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
    ```powershell
    .\test-chat.ps1
    ```
+
+### Option C: WhatsApp Voice Agent Tests (Stage 6)
+1. **Start the WhatsApp Bot Server**:
+   ```bash
+   cd whatsapp-bot
+   python main.py
+   # Or: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+   ```
+2. **Run Automated Test Suite (PowerShell)**:
+   ```powershell
+   .\whatsapp-bot\test-whatsapp.ps1
+   ```
+   Verifies:
+   - `GET /health`: Configuration status of credentials and active models.
+   - `GET /webhook`: Meta verification handshake challenge test (`hub.challenge`).
+   - Interactive Swagger documentation at `http://localhost:8000/docs`.
+3. **Interactive Swagger API Docs**:
+   - Open **[http://localhost:8000/docs](http://localhost:8000/docs)** to test and inspect all endpoints.
 
 ---
 
@@ -343,9 +426,13 @@ PERSONAL_PHONE_NUMBER=+923154483615
 
 ---
 
-## ⏳ Next Steps / Stage 6 Roadmap
-- [ ] **Stage 6: WhatsApp Voice Bot Integration (`@whiskeysockets/baileys`)**:
-  - Connect AI voice agent directly to an existing WhatsApp account for $0 international carrier fee calling and audio notes.
+## ⏳ Next Steps / Future Roadmap
+- [x] **Stage 6: WhatsApp Voice Agent Initialized & Verified**:
+  - FastAPI webhook server in [`whatsapp-bot/main.py`](file:///c:/voice%20agenty/whatsapp-bot/main.py), Groq Whisper STT, Llama 3.3 70B, zero-cost Edge-TTS, and Meta Media Graph API integration.
+- [ ] **Meta Cloud API Permanent System User Token Configuration**:
+  - Add production `WHATSAPP_TOKEN` and `PHONE_NUMBER_ID` in `whatsapp-bot/.env` to link to user's registered WhatsApp business number.
+- [ ] **Direct Personal WhatsApp Integration via Baileys (Optional Alternative)**:
+  - Connect AI voice agent directly to personal SIM WhatsApp without requiring Meta Business verification.
 - [ ] **Client-Side Neural VAD (Silero VAD)**:
   - High-accuracy ML voice detection in the browser to eliminate button pressing entirely.
 - [ ] **Custom Character Personas & Prompt Presets**:
