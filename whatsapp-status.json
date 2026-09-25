@@ -1,13 +1,9 @@
 {
-  "state": "connected",
-  "connected": true,
-  "botUser": "923154483615:40@s.whatsapp.net",
-  "userName": "husnain bhatti",
-  "timestamp": "2026-09-25T07:57:30.320Z",
-  "conversationsCount": 0,
-  "user": {
-    "id": "923154483615:40@s.whatsapp.net",
-    "name": "husnain bhatti",
-    "lid": "141081236750502:40@lid"
-  }
+  "state": "qr_ready",
+  "connected": false,
+  "botUser": null,
+  "userName": null,
+  "timestamp": "2026-09-25T08:16:47.822Z",
+  "conversationsCount": 2,
+  "qr": "https://wa.me/settings/linked_devices#2@BDz36jZMQrHpLQNYlHkuIw8pf2H2YQ0YYzuhmGa3rPLU+uceM74xJfmpD8jiF0EfvErKR8NMArP586XWngCZWPf9TvMdqqfkpjg=,TyYLZjyECnh9275WU9JWUK1x3wCzHp6DGc9cNYIWvkU=,JSOGOg0Il6Nb0c7N0MBZIvraGio1TmUldNXx7ZYr72g=,gsSErDGtfp4muGdI7ol1g4LwM4AR5HBsaCcKWKne3xs=,1"
 }

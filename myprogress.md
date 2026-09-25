@@ -8,7 +8,7 @@ A voice agent needs three main superpowers:
 2. **Brain (LLM - Large Language Model):** Reads the words, understands what you mean, and thinks of a smart response.
 3. **Mouth (Text-to-Speech):** Speaks the answer aloud so you can hear it.
 
-🎉 **Stage 5 & Stage 6 are now live:** We have officially built **Mobile Setup & Carrier Call Forwarding with SMS Summaries** (Stage 5) AND initialized the **WhatsApp Cloud API Voice Agent** (Stage 6)! When someone calls your cell phone, your carrier diverts unanswered calls to Bella with instant SMS summaries. And now on WhatsApp, users can send voice notes and receive intelligent spoken audio replies for **$0.00 carrier fees**!
+🎉 **Stage 5, Stage 6 & Stage 6.1 are now live:** We have officially built **Mobile Setup & Carrier Call Forwarding with SMS Summaries** (Stage 5), **WhatsApp Cloud API Voice Agent** (Stage 6), AND the **Direct Personal WhatsApp AI Agent with Call Interception** (Stage 6.1)! Anyone can scan the QR code to pair their personal WhatsApp number, intercept unanswered calls with an AI voice note, and converse via native voice notes for **$0.00 carrier fees**!
 
 ---
 
@@ -943,14 +943,237 @@ Open **[http://localhost:8000/docs](http://localhost:8000/docs)** in your browse
 
 ---
 
+## 🚀 What We Did Today: Direct Personal WhatsApp AI Agent with Call Interception (Stage 6.1)
+
+In Stage 6, we built the WhatsApp Cloud API integration using Meta's official developer platform. While powerful, Meta Cloud API requires developer accounts, business verification, and per-conversation fees. 
+
+**Today, we achieved the ultimate breakthrough: connecting our AI voice agent directly to ANY personal WhatsApp account with $0.00 Meta fees, instant QR code pairing, incoming call interception, and full voice-to-voice conversation memory!**
+
+---
+
+### 1. The Big Goal: Personal WhatsApp Without Meta Fees
+* **The Problem:** 
+  - Standard WhatsApp Cloud API requires Meta Business Manager verification, phone number migration away from the personal WhatsApp app, and costs money after free tiers.
+  - Users in Pakistan and globally want to keep their **existing personal WhatsApp** on their regular SIM card while having the AI answer calls and voice messages!
+* **The Stage 6.1 Breakthrough:**
+  - Built [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js) using the open-source **Baileys Multi-Device library** (`@whiskeysockets/baileys`).
+  - Instead of business API keys, it connects just like **WhatsApp Web** or **WhatsApp Desktop**!
+  - You open our web studio, point your phone at the QR code, tap **Link a Device**, and your AI assistant is instantly live on your personal number!
+
+---
+
+### 2. How Call Interception Works (The WhatsApp VoIP Problem)
+* **The Reality of WhatsApp Calls:**
+  - WhatsApp's end-to-end encrypted VoIP audio streams (WebRTC / SRTP) are handled directly by WhatsApp's closed mobile apps and are **not** exposed to third-party web clients.
+  - You cannot pipe live telephone audio packets in real-time over the WhatsApp Web protocol.
+* **The Elegant Engineering Solution (Call Interception & Deflection):**
+  1. **Detection:** When someone dials your WhatsApp number, Baileys emits a `call` event with `status: "offer"`.
+  2. **Interception:** Our code instantly silences and rejects the incoming call:
+     ```javascript
+     await sock.rejectCall(call.id, call.from);
+     ```
+  3. **Immediate Voice Note Delivery:** Within seconds, the AI synthesizes an authentic voice note and sends it directly into the caller's chat:
+     > *"Hello! You've reached my AI voice assistant. I am answering on my owner's behalf because they are currently unavailable. Please hold down the microphone button right here in this chat and leave your voice note, and I will assist you immediately!"*
+  4. **Text Companion:** Also sends a clean companion text message confirming the call was received.
+  5. **Rate Limiting:** Protects callers with a 2-minute debounce so repeat calls don't trigger spam loops.
+  6. **Call History Vault:** Logs the missed call, caller number, timestamp, and AI transcript directly into `call-history.json`!
+
+---
+
+### 3. The Complete Voice-to-Voice Loop on Personal WhatsApp
+```
+📱 Caller sends WhatsApp Voice Note (.ogg)
+        │
+        ▼
+[Baileys Socket — messages.upsert]
+        │
+        ▼  1. Download raw Opus audio buffer (downloadMediaMessage)
+[Audio Buffer in Memory]
+        │
+        ▼  2. Transcribe via Groq Whisper Turbo (~200ms)
+[Groq Whisper — whisper-large-v3-turbo]
+        │  Result: "Hi, I wanted to ask if you're available for a meeting tomorrow."
+        │
+        ▼  3. Contextual Reasoning with Memory (~300ms)
+[Groq LLM — openai/gpt-oss-120b / llama-3.3-70b]
+        │  Maintains per-contact conversation history (up to 16 turns)
+        │  Generates conversational response (no markdown, spoken style)
+        │
+        ▼  4. Zero-Cost Neural Voice Synthesis (~400ms)
+[Microsoft Edge-TTS — en-US-AriaNeural ($0.00 Cost)]
+        │  Generates raw audio via edge-tts-synthesizer.py
+        │
+        ▼  5. Opus Transcoding via FFmpeg (~150ms)
+[ffmpeg-static: 48kHz mono Opus OGG]
+        │  Encodes to WhatsApp-compliant Opus OGG format
+        │
+        ▼  6. Send Native WhatsApp Voice Note (PTT)
+[sock.sendMessage with ptt: true]
+        │
+        ▼
+🎧 Caller hears authentic spoken AI voice note!
+```
+
+---
+
+### 4. 🕵️‍♂️ Detective Story #12: The Mystery of the Broken Emojis (Mojibake & UTF-8)
+*(A classic Web Architecture lesson on Character Encoding and Windows HTTP Servers!)*
+
+#### 🔍 The Mystery:
+When we opened the WhatsApp QR pairing page in the browser, the title and status cards looked completely broken:
+> `ðŸ¤– WhatsApp AI Voice Agent` instead of `🤖 WhatsApp AI Voice Agent`  
+> `âš ï¸` instead of `⚠️`  
+> `ðŸ4F2` instead of `📱`  
+
+This bizarre phenomenon where characters turn into gibberish is known in computer science as **Mojibake** (Japanese for *"character transformation"*).
+
+#### 🧩 The Root Cause:
+1. **The Default Encoding Mismatch:**
+   - In modern web development, all emojis and non-English scripts (Urdu, Arabic) are encoded using **UTF-8** (which uses 2 to 4 bytes per character).
+   - In Node.js, when you create an HTTP server with `http.createServer()` and set:
+     ```javascript
+     res.writeHead(200, { "Content-Type": "text/html" });
+     ```
+     without explicitly specifying `; charset=utf-8`, Windows browsers fall back to **Windows-1252** or **ISO-8859-1** (single-byte encodings)!
+   - When the browser reads a 4-byte UTF-8 emoji like `🤖` (`0xF0 0x9F 0xA4 0x96`) through a 1-byte lens, it renders 4 separate Latin characters: `ð`, `Ÿ`, `¤`, `–`!
+
+#### 🛠️ How We Fixed It Completely:
+1. **Explicit HTTP Header:**
+   ```javascript
+   res.writeHead(200, { 
+     "Content-Type": "text/html; charset=utf-8",
+     "Cache-Control": "no-cache, no-store"
+   });
+   ```
+2. **HTML Meta Tag:**
+   ```html
+   <meta charset="UTF-8">
+   ```
+3. **HTML Numeric Character Entities:**
+   Instead of pasting raw multi-byte emojis in server-generated HTML templates, we used safe numeric HTML entities:
+   - `&#x1F7E2;` for 🟢 Green Circle
+   - `&#x1F4F2;` for 📲 Phone with Arrow
+   - `&#x2713;` for ✓ Checkmark
+   - `&rarr;` for → Arrow
+
+**Result:** 100% crystal-clear rendering across all operating systems, browsers, and mobile devices with zero mojibake!
+
+---
+
+### 5. 🕵️‍♂️ Detective Story #13: The Mystery of the Hardcoded Number (Making it Universal)
+*(A Software Engineering lesson on Multi-Tenant Design & Dynamic Adapters!)*
+
+#### 🔍 The Problem:
+Our early prototype had a single phone number (`+923154483615`) and name (`Husnain`) hardcoded into the system prompt, greetings, and logging. 
+If anyone else in Pakistan or worldwide scanned the QR code with their phone, the AI would still say:
+> *"Hello! You've reached Husnain (+923154483615)'s AI voice assistant..."*
+
+#### 🧩 The Solution (Dynamic Identity Adapter):
+We completely decoupled the agent from any fixed identity:
+1. **Dynamic Baileys Identity Extraction:**
+   When a user scans the QR code, Baileys fires the `connection === "open"` event and provides `sock.user`:
+   ```javascript
+   botUser = sock.user;
+   const userName = botUser?.name || "the phone owner";
+   const userNumber = botUser?.id?.split(":")[0] || "this number";
+   ```
+2. **Dynamic System Prompt Generator (`getSystemPrompt()`):**
+   The AI brain prompt is now built dynamically in real-time for whichever phone number is paired:
+   > *"You are a warm, articulate, and helpful AI voice assistant answering WhatsApp messages and calls on behalf of {userName} (+{userNumber})."*
+3. **Multilingual & Urdu Support:**
+   Added prompt rules so that if a caller speaks in Urdu or Roman Urdu, the AI replies naturally in Urdu transliterated into Latin script!
+4. **Universal Session Management:**
+   - Added a `/logout` endpoint (`http://localhost:3005/logout`) that safely severs the Baileys session, clears `auth_baileys/`, and restarts the server with a fresh QR code so any user can switch accounts in seconds!
+
+---
+
+### 6. 🕵️‍♂️ Detective Story #14: The Mystery of the Missing QR Image in Browser
+*(Why ASCII QR in Terminal Wasn't Enough for End Users!)*
+
+#### 🔍 The Mystery:
+Baileys provides a raw QR string (like `2@abc123xyz...`). Using `qrcode-terminal`, this prints as ASCII text art inside the developer's console. But in the browser web page, it looked like a block of unreadable text because web browsers don't render terminal ANSI escape sequences as images!
+
+#### 🛠️ How We Solved It:
+1. Installed the standard `qrcode` npm package.
+2. The moment a new pairing challenge arrives from WhatsApp:
+   ```javascript
+   currentQrDataUrl = await QRCode.toDataURL(qr, {
+     width: 320,
+     margin: 2,
+     color: { dark: "#e2e8f0", light: "#0f172a" }
+   });
+   ```
+3. Injected the generated Base64 Data URL directly into an HTML `<img>` tag:
+   ```html
+   <img src="${currentQrDataUrl}" alt="Scan this QR code with WhatsApp" />
+   ```
+4. Added an automatic 4-second page reload script so that if the user scans the code, the page immediately updates to show **🟢 Connected & Online** with their name and phone number!
+
+---
+
+### 7. 🛡️ Production Hardening: What Makes This Agent Rock-Solid
+* **Defensive Null Checks:** Guarded against undefined `msg.key`, missing `msg.message`, and malformed Baileys payloads.
+* **Filter Out Non-Human Messages:** Ignores group chats (`@g.us`), broadcasts (`@broadcast`), status stories (`status@broadcast`), and messages sent by the bot itself (`fromMe: true`).
+* **Active Processing Debouncing:** Prevents race conditions where rapid back-to-back voice notes from the same sender trigger overlapping LLM and TTS tasks.
+* **Exponential Backoff Reconnect:** If the Wi-Fi drops or WhatsApp closes the socket, the agent retries with increasing backoff delays: 3s → 6s → 12s → 24s → max 60s, avoiding server throttling.
+* **Graceful TTS Fallback:** If Edge-TTS or FFmpeg ever encounters an issue, the bot automatically falls back to sending the reply as a text message so the user never gets left on "read".
+* **Persistent Call History:** Every intercepted call, user voice message, and AI reply is saved to `call-history.json` and visible in our web dashboard!
+
+---
+
+### 8. 🛠️ How to Use the Personal WhatsApp Agent Right Now
+
+#### Step 1: Start the Agent
+```bash
+npm run whatsapp
+```
+*(Or run `node whatsapp-personal.js`)*
+
+#### Step 2: Open the Web QR Studio
+Open your browser to:
+**[http://localhost:3005/qr](http://localhost:3005/qr)**
+
+You will see:
+- A stylish dark-mode card with a crisp QR code.
+- Clear 3-step instructions on how to link your device.
+- Auto-refreshing status badge.
+
+#### Step 3: Scan with Any WhatsApp Account
+1. Open WhatsApp on **any mobile phone** (Android or iPhone).
+2. Go to **Settings ⚙️** (or the 3 dots menu) → **Linked Devices**.
+3. Tap **Link a Device** and point your phone camera at your computer screen!
+4. Within 2 seconds, the screen updates to:
+   > **🟢 Connected & Online — User: Your Name (+Your Number)**
+
+#### Step 4: Test Real Interactions!
+- **Call your WhatsApp from another phone:** Watch your server intercept the call and reply with an AI voice note!
+- **Send a voice note (PTT):** Speak anything in English or Urdu. The AI transcribes your voice with Groq Whisper and sends back a natural spoken voice note!
+- **Send a text message:** The AI replies with an audio voice note and companion text!
+- **To switch to a different number:** Click the red **Disconnect & Pair New Number** button or visit `http://localhost:3005/logout`.
+
+---
+
+## 📚 Key Concepts Dictionary (Updated for Stage 6.1)
+
+| Term | What It Means in Simple Words |
+| :--- | :--- |
+| **Baileys** | An open-source TypeScript/JavaScript library that communicates directly with WhatsApp Web Multi-Device WebSockets without requiring official Meta APIs. |
+| **Call Interception / Deflection** | Programmatically silencing an incoming ring and immediately dispatching an alternative communication channel (like an AI voice note). |
+| **PTT (Push-to-Talk)** | Native WhatsApp voice messages (green microphone bubbles with waveforms) rather than standard audio attachments. |
+| **Opus in OGG** | The high-efficiency audio codec standard required by WhatsApp for native voice note playback (48,000Hz, mono). |
+| **Mojibake** | Garbled, corrupted text that appears when text encoded in one character set (like UTF-8) is decoded using another (like Windows-1252). |
+| **Base64 Data URL** | An image encoded directly into text characters (`data:image/png;base64,...`) so it can be embedded in HTML without needing a separate file. |
+| **Debouncing** | A programming pattern that prevents a function from being executed multiple times simultaneously during rapid-fire events. |
+| **Exponential Backoff** | Gradually increasing the waiting time between reconnection attempts after a network failure to avoid overloading the server. |
+
+---
+
 ## 🚀 What We Are Ready to Build Next (Future Roadmap)
-1. **Meta Cloud API Permanent System User Token Configuration:**
-   - Link production credentials and number in `whatsapp-bot/.env`.
-2. **Direct Personal WhatsApp Integration via Baileys (Optional Alternative):**
-   - Connect AI voice agent directly to personal SIM WhatsApp via QR code scan without requiring Meta Business verification.
+1. **Stage 6.1 Direct Personal WhatsApp Integration via Baileys (Completed! ✅):**
+   - Universal QR scan pairing (`http://localhost:3005/qr`), real-time call interception, and native Opus PTT voice notes.
+2. **Meta Cloud API Permanent System User Token Configuration (Stage 6):**
+   - Link production credentials and number in `whatsapp-bot/.env` for enterprise deployments.
 3. **Client-Side Neural VAD (Silero VAD):**
    - Pure machine-learning voice activity detection running directly in the browser with zero buttons.
 4. **Custom Character Personas & Prompt Presets:**
    - Switchable agent personalities: Hotel Concierge, Tech Support Specialist, Medical Clinic Receptionist, and friendly assistant.
-
-

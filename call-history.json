@@ -1,5 +1,152 @@
 [
   {
+    "callSid": "WA_1790323421574_h85w",
+    "callerNumber": "+79693285961975",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Chat Exchange",
+    "startTime": "2026-09-25T08:03:41.574Z",
+    "endTime": "2026-09-25T08:03:41.575Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "user",
+        "text": "Can you tell me what is UCP"
+      },
+      {
+        "role": "assistant",
+        "text": "UCP ka matlab aam tor par Unified Communications Platform hota hai, jo messaging, voice aur video services ko ek saath integrate karta hai. Yeh businesses ko ek hi system se customers aur team members se asani se rabta rakhne mein madad karta hai. Agar aap kisi specific UCP ke baare mein pooch rahe hain, to thoda detail dein takay main behtar jawab de sakun."
+      }
+    ],
+    "summary": "User: \"Can you tell me what is UCP\". AI: \"UCP ka matlab aam tor par Unified Communications Platform hota hai, jo messaging, voice aur video services ko ek saath integrate karta hai. Yeh businesses ko ek hi system se customers aur team members se asani se rabta rakhne mein madad karta hai. Agar aap kisi specific UCP ke baare mein pooch rahe hain, to thoda detail dein takay main behtar jawab de sakun.\".",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790323372995_bmso",
+    "callerNumber": "+79693285961975",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Chat Exchange",
+    "startTime": "2026-09-25T08:02:52.995Z",
+    "endTime": "2026-09-25T08:02:52.995Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "user",
+        "text": "And"
+      },
+      {
+        "role": "assistant",
+        "text": "Could you let me know what else you’d like to ask or share?"
+      }
+    ],
+    "summary": "User: \"And\". AI: \"Could you let me know what else you’d like to ask or share?\".",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790323366215_1z7w",
+    "callerNumber": "+39814900486311",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Chat Exchange",
+    "startTime": "2026-09-25T08:02:46.215Z",
+    "endTime": "2026-09-25T08:02:46.215Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "user",
+        "text": "Kya hai"
+      },
+      {
+        "role": "assistant",
+        "text": "Main Husnain ka assistant hoon, wo abhi available nahi hain. Aapka message mil gaya hai, wo jald se jald aapse contact karenge. Kuch aur madad chahiye ho to bataiye."
+      }
+    ],
+    "summary": "User: \"Kya hai\". AI: \"Main Husnain ka assistant hoon, wo abhi available nahi hain. Aapka message mil gaya hai, wo jald se jald aapse contact karenge. Kuch aur madad chahiye ho to bataiye.\".",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790323329568_ag8g",
+    "callerNumber": "+79693285961975",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Voice Note Exchange",
+    "startTime": "2026-09-25T08:02:09.568Z",
+    "endTime": "2026-09-25T08:02:09.568Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "user",
+        "text": "Can you tell me who's name actually is?"
+      },
+      {
+        "role": "assistant",
+        "text": "I’m the assistant for Husnain Bhatti, so the name you’re looking for is Husnain Bhatti. How can I help you further?"
+      }
+    ],
+    "summary": "User: \"Can you tell me who's name actually is?\". AI: \"I’m the assistant for Husnain Bhatti, so the name you’re looking for is Husnain Bhatti. How can I help you further?\".",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790323303144_lw5d",
+    "callerNumber": "+79693285961975",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Voice Note Exchange",
+    "startTime": "2026-09-25T08:01:43.144Z",
+    "endTime": "2026-09-25T08:01:43.144Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "user",
+        "text": "I want to ask this man if he is available today for dinner."
+      },
+      {
+        "role": "assistant",
+        "text": "Sure, I’ll let Husnain know you’d like to know if he’s available for dinner today. I’ll pass your message along and he’ll get back to you soon."
+      }
+    ],
+    "summary": "User: \"I want to ask this man if he is available today for dinner.\". AI: \"Sure, I’ll let Husnain know you’d like to know if he’s available for dinner today. I’ll pass your message along and he’ll get back to you soon.\".",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790323279489_crz8",
+    "callerNumber": "+79693285961975",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Voice Note Exchange",
+    "startTime": "2026-09-25T08:01:19.489Z",
+    "endTime": "2026-09-25T08:01:19.489Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "user",
+        "text": "Who is this man?"
+      },
+      {
+        "role": "assistant",
+        "text": "Hello, I'm the voice assistant for Husnain Bhatti. How can I help you today?"
+      }
+    ],
+    "summary": "User: \"Who is this man?\". AI: \"Hello, I'm the voice assistant for Husnain Bhatti. How can I help you today?\".",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790323255194_h2fa",
+    "callerNumber": "+79693285961975",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Call (Auto-Intercepted)",
+    "startTime": "2026-09-25T08:00:55.194Z",
+    "endTime": "2026-09-25T08:00:55.194Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call intercepted and silenced."
+      },
+      {
+        "role": "assistant",
+        "text": "Hello! You have reached husnain bhatti's AI voice assistant. I am answering on their behalf because they are currently unavailable. Please hold down the microphone button right here in this chat and leave your voice note, and I will assist you or notify husnain bhatti immediately."
+      }
+    ],
+    "summary": "Call from +79693285961975 intercepted. AI greeting sent.",
+    "smsSent": false
+  },
+  {
     "callSid": "WA_1790323115314_lygu",
     "callerNumber": "+39814900486311",
     "channel": "WhatsApp",

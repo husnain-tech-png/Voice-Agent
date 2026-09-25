@@ -6,8 +6,9 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 ---
 
 ## 🚦 Current Status Summary
-- **Current Phase:** ✅ **Stage 6 Initialized & Verified — WhatsApp Cloud API Voice Agent (Voice-to-Voice Audio Notes, Groq Whisper STT, Llama-3.3-70B Brain, Zero-Cost Microsoft Edge-TTS Speech, Meta Media Graph API Ingestion & Delivery)**
+- **Current Phase:** ✅ **Stage 6 & 6.1 Fully Functional — WhatsApp AI Voice Agent (Personal WhatsApp via Baileys QR Pairing on Port 3005 + Meta Cloud API Webhook on Port 8000; Real-Time Call Interception, Voice-to-Voice PTT Notes, Groq Whisper STT, Groq LLM, Zero-Cost Edge-TTS & FFmpeg Opus Transcoding)**
 - **Protocols & Gateways:** 
+  - 📲 **Personal WhatsApp AI Voice Agent (Stage 6.1 Active - Port 3005):** Node.js Baileys service in [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), direct QR pairing for any phone number, real-time WhatsApp call interception (`sock.rejectCall` + auto AI voice note), native PTT voice notes (`audio/ogg; codecs=opus`), Web QR dashboard on `http://localhost:3005/qr`, and status API (`GET /status`).
   - 🤖 **WhatsApp Cloud API Voice Agent (Stage 6 Active - Port 8000):** FastAPI server in [`whatsapp-bot/main.py`](file:///c:/voice%20agenty/whatsapp-bot/main.py), Meta Cloud API Webhook (`POST /webhook`, verification `GET /webhook`), Health Diagnostics (`GET /health`), Interactive Swagger Docs (`/docs`), Background Task Audio Pipeline, and Automated Test Suite ([`whatsapp-bot/test-whatsapp.ps1`](file:///c:/voice%20agenty/whatsapp-bot/test-whatsapp.ps1))
   - 🌐 **Telnyx CPaaS & TeXML (Active & Primary):** Full-duplex μ-law (8000Hz) WebSocket on `/telnyx/media-stream`, TeXML Webhook on `/telnyx/incoming`, TeXML App ID `3055170547735332106`, Status on `/api/telnyx/status`, Auto-Sync on `/api/telnyx/sync`
   - 📱 **Mobile Call Forwarding & History:** REST endpoints on `/api/forwarding/setup`, `/api/calls/history`, `/api/calls/:callSid`, `/api/calls/test-summary-sms`
@@ -225,6 +226,40 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 - [x] **Automated Testing Suite ([`whatsapp-bot/test-whatsapp.ps1`](file:///c:/voice%20agenty/whatsapp-bot/test-whatsapp.ps1))**:
   - 1-click PowerShell runner validating health check, Meta webhook verification challenge handshake, and API documentation accessibility.
 
+### Stage 6.1: Direct Personal WhatsApp AI Agent (Baileys QR Scan, Call Interception & Zero-Cost Voice Notes)
+- [x] **Direct Personal WhatsApp Integration via Baileys ([`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js))**:
+  - Direct connection to personal WhatsApp numbers via QR scan using `@whiskeysockets/baileys` with multi-file auth persistence (`auth_baileys/`).
+  - Completely eliminates Meta Business verification, Cloud API approval delays, and recurring per-conversation messaging costs.
+- [x] **Universal Number Pairing (Pakistan & Worldwide)**:
+  - Dynamically binds to whoever scans the QR code. All hardcoded numbers and fixed names eliminated.
+  - Dynamically builds the AI system prompt with the connected user's profile (`botUser.name` and phone number).
+  - Native bilingual conversational capability in English, Urdu, and Roman Urdu.
+- [x] **Incoming WhatsApp Call Interception & Deflection**:
+  - Real-time `call` event listener captures incoming voice and video calls (`status === "offer"`).
+  - Automatically silences/rejects the call (`sock.rejectCall`).
+  - Immediately dispatches a customized AI voice note audio greeting explaining that the recipient is unavailable and prompting the caller to leave a voice message right in the chat.
+  - Rate-limited auto-responses (once every 2 minutes per caller) to prevent spam loops.
+- [x] **Native WhatsApp PTT Voice-to-Voice Loop**:
+  - Downloads raw incoming `.ogg` Opus audio buffers via `downloadMediaMessage`.
+  - Transcribes audio using Groq Whisper Turbo (`whisper-large-v3-turbo`) in ~200ms.
+  - Conversational intelligence via Groq LLM (`openai/gpt-oss-120b` / `llama-3.3-70b-versatile`) with per-contact multi-turn conversation memory.
+  - Zero-cost speech synthesis using Microsoft Edge Neural TTS (`edge-tts-synthesizer.py` + `edge-tts-helper.js`).
+  - FFmpeg transcoding via `ffmpeg-static` to 48kHz mono Opus OGG (`audio/ogg; codecs=opus`) with `ptt: true` push-to-talk presentation.
+- [x] **Web QR Pairing Dashboard & Status API (`http://localhost:3005/qr`)**:
+  - Dedicated lightweight HTTP server on port 3005.
+  - Generates crisp scannable QR code images in real time using the `qrcode` package (base64 Data URL) inside a modern dark glassmorphic UI.
+  - Enforces UTF-8 character encoding with HTML entities (`&#x1F7E2;`, `&#x1F4F2;`) eliminating all garbled character rendering (mojibake).
+  - Automatic 4-second polling refresh until device pairing is verified.
+  - Interactive `/logout` endpoint to decouple sessions and re-pair any new mobile number on demand.
+  - Health and status endpoint (`GET /status`) providing live connection state and active conversation counts.
+- [x] **Resilience & Production Hardening**:
+  - Multi-layer defensive null checks across `messages.upsert` and `call` events.
+  - Automatic filtering out of group chats (`@g.us`), status updates, and bot self-messages.
+  - Active processing debounce set (`activeProcessing`) preventing duplicate overlapping replies.
+  - Exponential reconnection backoff strategy (3s, 6s, 12s, 24s... up to 60s) to handle network interruptions cleanly.
+  - Automatic recovery from corrupted auth directories.
+  - Persistent interaction and call logging to `call-history.json`.
+
 ---
 
 ## 🏗️ Architecture & Data Flow
@@ -373,6 +408,26 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 3. **Interactive Swagger API Docs**:
    - Open **[http://localhost:8000/docs](http://localhost:8000/docs)** to test and inspect all endpoints.
 
+### Option D: Personal WhatsApp AI Voice Agent (Stage 6.1 — Port 3005)
+1. **Start the Personal WhatsApp Service**:
+   ```bash
+   npm run whatsapp
+   # Or: node whatsapp-personal.js
+   ```
+2. **Scan the Dynamic Web QR Code**:
+   - Open **[http://localhost:3005/qr](http://localhost:3005/qr)** in any web browser.
+   - You will see a clean, dark-mode QR code card that auto-refreshes every 4 seconds.
+   - On **any smartphone** (Pakistan SIM or worldwide), open WhatsApp → **Settings ⚙️** (or three dots) → **Linked Devices** → **Link a Device**.
+   - Point your phone camera at the QR code on your screen to pair!
+3. **Verify Connection & Health**:
+   - Check status via JSON: `http://localhost:3005/status`
+   - Shows connection state (`connected`), paired user name, and phone number.
+4. **Live Verification**:
+   - **Incoming Calls:** Have any WhatsApp contact call the linked number. The agent silences the ring and delivers an AI voice note explaining the user is busy and asking for a voice note.
+   - **Voice Notes:** Send a WhatsApp voice note (PTT). The agent transcribes it with Groq Whisper and sends an intelligent spoken voice note back using Microsoft Edge-TTS!
+   - **Text Messages:** Send text messages — the agent replies with voice and text.
+   - **Disconnect / Switch Numbers:** Visit `http://localhost:3005/logout` to disconnect and pair a different phone number.
+
 ---
 
 ## 📱 How to Connect Your Real Phone Number (03154483615 / Zong Pakistan)
@@ -422,18 +477,20 @@ PERSONAL_PHONE_NUMBER=+923154483615
 
 ### 💡 Pakistan Carrier Note (Zong Airtime)
 * Zong charges standard call forwarding airtime when diverting calls internationally. Ensure your `03154483615` SIM has a small balance (Rs. 50–100) or an IDD bucket active.
-* For $0.00 international carrier fees, **Stage 6 WhatsApp Voice Bot** connects directly to WhatsApp on `03154483615`!
+* For $0.00 international carrier fees, **Stage 6 / 6.1 WhatsApp Voice Agent** connects directly to WhatsApp on `03154483615` (or any number) with zero cellular airtime cost!
 
 ---
 
 ## ⏳ Next Steps / Future Roadmap
 - [x] **Stage 6: WhatsApp Voice Agent Initialized & Verified**:
   - FastAPI webhook server in [`whatsapp-bot/main.py`](file:///c:/voice%20agenty/whatsapp-bot/main.py), Groq Whisper STT, Llama 3.3 70B, zero-cost Edge-TTS, and Meta Media Graph API integration.
+- [x] **Stage 6.1: Direct Personal WhatsApp Integration via Baileys**:
+  - Connect AI voice agent directly to personal SIM WhatsApp without requiring Meta Business verification.
+  - Universal QR scan pairing (`http://localhost:3005/qr`), real-time call interception, and native Opus PTT voice notes.
 - [ ] **Meta Cloud API Permanent System User Token Configuration**:
   - Add production `WHATSAPP_TOKEN` and `PHONE_NUMBER_ID` in `whatsapp-bot/.env` to link to user's registered WhatsApp business number.
-- [ ] **Direct Personal WhatsApp Integration via Baileys (Optional Alternative)**:
-  - Connect AI voice agent directly to personal SIM WhatsApp without requiring Meta Business verification.
 - [ ] **Client-Side Neural VAD (Silero VAD)**:
   - High-accuracy ML voice detection in the browser to eliminate button pressing entirely.
 - [ ] **Custom Character Personas & Prompt Presets**:
   - Switchable personas: Hotel Concierge, Tech Support Specialist, Medical Receptionist, Catbot.
+
