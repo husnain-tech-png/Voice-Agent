@@ -789,11 +789,12 @@
         <span id="sttBadge" class="badge badge-blue">Whisper Turbo</span>
         <span id="ttsBadge" class="badge badge-purple">Mouth: Initializing</span>
         <span id="phoneBadge" class="badge badge-purple">📞 Phone: Checking...</span>
+        <span id="waBadge" class="badge badge-green" style="cursor:pointer;" onclick="window.open('http://localhost:3005/qr', '_blank')">💬 WhatsApp: Checking...</span>
       </div>
     </div>
-    <p class="subtitle">Stage 5 — Mobile Call Forwarding, Summaries &amp; Ultra-Low Latency Streaming</p>
+    <p class="subtitle">Stage 6 — Personal WhatsApp Voice Agent, Call Interception &amp; Live Streaming</p>
 
-    <!-- Mode Selector: Stage 3 (WS) vs Stage 2 (HTTP) vs Stage 4 (Phone) vs Stage 5 (Mobile Setup) -->
+    <!-- Mode Selector: Stage 3 (WS) vs Stage 2 (HTTP) vs Stage 4 (Phone) vs Stage 5 (Mobile Setup) vs Stage 6 (WhatsApp) -->
     <div class="mode-selector">
       <button class="mode-btn active" id="modeWsBtn">
         ⚡ Live Stream (<span style="color:#38bdf8;">WS</span>)
@@ -806,6 +807,9 @@
       </button>
       <button class="mode-btn" id="modeMobileBtn">
         📱 Mobile Setup (<span style="color:#34d399;">S5</span>)
+      </button>
+      <button class="mode-btn" id="modeWaBtn">
+        💬 WhatsApp (<span style="color:#22c55e;">S6</span>)
       </button>
     </div>
 
@@ -1211,7 +1215,81 @@
       </div>
     </div>
   </div>
-</div>
+
+  <!-- 5. WhatsApp Personal Voice Agent Studio (Stage 6) -->
+  <div id="whatsappStudio" class="phone-studio" style="display: none;">
+    <!-- 1. Connection & Pairing Card -->
+    <div class="phone-card">
+      <div class="phone-card-title">
+        <span>💬 Personal WhatsApp AI Voice Agent</span>
+        <span id="waCardStatusBadge" class="badge badge-yellow">Checking...</span>
+      </div>
+      <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 12px;">
+        Direct connection to your personal WhatsApp number (<code>+923154483615</code>) via Baileys. Handles incoming calls and voice notes on your behalf with <strong>$0 cost</strong>!
+      </p>
+
+      <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+        <a href="http://localhost:3005/qr" target="_blank" class="btn btn-send" style="text-align: center; text-decoration: none; flex: 1; padding: 10px; font-weight: 600;">
+          📲 Open WhatsApp QR Link
+        </a>
+        <button type="button" class="btn btn-secondary" id="refreshWaStatusBtn" style="padding: 10px 14px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #f8fafc; border-radius: 8px; cursor: pointer;">
+          🔄 Refresh
+        </button>
+      </div>
+
+      <div id="waStatusBox" style="background: rgba(2, 6, 23, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 12px; font-size: 0.82rem;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <span style="color: #94a3b8;">Connection Status:</span>
+          <strong id="waStatusText" style="color: #38bdf8;">Checking...</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <span style="color: #94a3b8;">Personal Number:</span>
+          <strong id="waTargetNumber" style="color: #f8fafc;">+923154483615</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: #94a3b8;">Voice Synthesis:</span>
+          <span style="color: #34d399;">Microsoft Edge-TTS (100% Free, $0.00)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. How Incoming Call Interception Works -->
+    <div class="phone-card">
+      <div class="phone-card-title">
+        <span>⚡ Incoming Call Interception &amp; Voice Receptionist</span>
+        <span class="badge badge-green">Active</span>
+      </div>
+      <div class="step-guide">
+        <div class="step-guide-item">
+          <div class="step-num">1</div>
+          <div>
+            <strong>Someone Calls You on WhatsApp:</strong> When any contact dials your WhatsApp number, the bot detects the incoming call signal.
+          </div>
+        </div>
+        <div class="step-guide-item">
+          <div class="step-num">2</div>
+          <div>
+            <strong>Instant Silence &amp; Intercept:</strong> The bot silences the ring in &lt;100ms so you aren't disturbed.
+          </div>
+        </div>
+        <div class="step-guide-item">
+          <div class="step-num">3</div>
+          <div>
+            <strong>Immediate AI Voice Note Sent:</strong> The bot automatically synthesizes and delivers a personalized voice note to the caller:
+            <div style="color: #38bdf8; font-style: italic; margin-top: 4px; background: rgba(56, 189, 248, 0.1); padding: 8px; border-radius: 6px;">
+              "Hello! You've reached Husnain's AI voice assistant. I am answering on his behalf. I'm taking voice messages right now — please hold down the microphone button and leave your voice note, and I will assist you or notify Husnain immediately!"
+            </div>
+          </div>
+        </div>
+        <div class="step-guide-item">
+          <div class="step-num">4</div>
+          <div>
+            <strong>Continuous Voice-to-Voice Notes:</strong> When the caller replies with voice notes, Groq Whisper transcribes, Groq Llama 3.3 70B reasons, and Edge-TTS sends voice notes back in under 3 seconds!
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script>
     // Elements
@@ -1235,6 +1313,12 @@
     const modeHttpBtn = document.getElementById('modeHttpBtn');
     const modePhoneBtn = document.getElementById('modePhoneBtn');
     const modeMobileBtn = document.getElementById('modeMobileBtn');
+    const modeWaBtn = document.getElementById('modeWaBtn');
+    const waBadge = document.getElementById('waBadge');
+    const whatsappStudio = document.getElementById('whatsappStudio');
+    const waCardStatusBadge = document.getElementById('waCardStatusBadge');
+    const waStatusText = document.getElementById('waStatusText');
+    const refreshWaStatusBtn = document.getElementById('refreshWaStatusBtn');
     const testVoiceBtn = document.getElementById('testVoiceBtn');
     const pipelineProtocolInfo = document.getElementById('pipelineProtocolInfo');
 
@@ -1912,32 +1996,45 @@
       modeHttpBtn.classList.remove('active');
       modePhoneBtn.classList.remove('active');
       modeMobileBtn.classList.remove('active');
+      modeWaBtn.classList.remove('active');
 
       if (newMode === 'websocket') {
         modeWsBtn.classList.add('active');
         chatStudio.style.display = 'block';
         phoneStudio.style.display = 'none';
         mobileStudio.style.display = 'none';
+        whatsappStudio.style.display = 'none';
         pipelineProtocolInfo.innerHTML = '⚡ WebSocket Stream: <code>ws://localhost:3000/ws/voice</code> • Sub-500ms Pipelined TTFA';
       } else if (newMode === 'http') {
         modeHttpBtn.classList.add('active');
         chatStudio.style.display = 'block';
         phoneStudio.style.display = 'none';
         mobileStudio.style.display = 'none';
+        whatsappStudio.style.display = 'none';
         pipelineProtocolInfo.innerHTML = '📦 Batch HTTP Pipeline: <code>POST /voice-chat</code> • Standard Response';
       } else if (newMode === 'phone') {
         modePhoneBtn.classList.add('active');
         chatStudio.style.display = 'none';
         phoneStudio.style.display = 'flex';
         mobileStudio.style.display = 'none';
+        whatsappStudio.style.display = 'none';
         pipelineProtocolInfo.innerHTML = '📞 Twilio Phone Line Stream: <code>ws://localhost:3000/twilio/media-stream</code> • G.711 μ-law (8kHz)';
       } else if (newMode === 'mobile') {
         modeMobileBtn.classList.add('active');
         chatStudio.style.display = 'none';
         phoneStudio.style.display = 'none';
         mobileStudio.style.display = 'flex';
+        whatsappStudio.style.display = 'none';
         pipelineProtocolInfo.innerHTML = '📱 Mobile Call Forwarding: GSM CFNR → Twilio → AI Agent → SMS Summary to your phone';
         loadCallHistory();
+      } else if (newMode === 'whatsapp') {
+        modeWaBtn.classList.add('active');
+        chatStudio.style.display = 'none';
+        phoneStudio.style.display = 'none';
+        mobileStudio.style.display = 'none';
+        whatsappStudio.style.display = 'flex';
+        pipelineProtocolInfo.innerHTML = '💬 WhatsApp Voice Agent: Call Interception & Voice Notes • Groq Whisper + Llama 3.3 70B + Edge-TTS ($0.00)';
+        loadWhatsAppStatus();
       }
     }
 
@@ -1945,6 +2042,37 @@
     modeHttpBtn.addEventListener('click', () => switchMode('http'));
     modePhoneBtn.addEventListener('click', () => switchMode('phone'));
     modeMobileBtn.addEventListener('click', () => switchMode('mobile'));
+    modeWaBtn.addEventListener('click', () => switchMode('whatsapp'));
+    refreshWaStatusBtn.addEventListener('click', loadWhatsAppStatus);
+
+    // WhatsApp Status Polling
+    async function loadWhatsAppStatus() {
+      try {
+        const res = await fetch('/api/whatsapp/status');
+        const data = await res.json();
+        if (data.connected) {
+          waBadge.className = 'badge badge-green';
+          waBadge.textContent = '🟢 WA Connected';
+          waCardStatusBadge.className = 'badge badge-green';
+          waCardStatusBadge.textContent = '🟢 Online & Listening';
+          waStatusText.innerHTML = '<span style="color:#34d399;">Connected to WhatsApp</span>';
+        } else if (data.state === 'qr_ready') {
+          waBadge.className = 'badge badge-yellow';
+          waBadge.textContent = '📲 WA: Scan QR';
+          waCardStatusBadge.className = 'badge badge-yellow';
+          waCardStatusBadge.textContent = '📲 Scan QR to Link';
+          waStatusText.innerHTML = '<span style="color:#fbbf24;">QR Ready — Click Link Above to Scan</span>';
+        } else {
+          waBadge.className = 'badge badge-purple';
+          waBadge.textContent = '💬 WA: Ready to Start';
+          waCardStatusBadge.className = 'badge badge-purple';
+          waCardStatusBadge.textContent = 'Start with: npm run whatsapp';
+          waStatusText.innerHTML = '<span style="color:#94a3b8;">Agent Idle (Run <code>npm run whatsapp</code>)</span>';
+        }
+      } catch (e) {
+        console.warn('WA status check error:', e);
+      }
+    }
 
     // G.711 μ-law Web Audio Decoder (plays 8kHz μ-law audio through browser audio context)
     function decodeMulawToAudioBuffer(base64Mulaw, sampleRate = 8000) {
@@ -2387,9 +2515,11 @@
           callCounterBadge.textContent = `📞 ${healthRes.stage5.callHistoryCount} calls`;
         }
 
-        // Load forwarding codes & Telnyx status
+        // Load forwarding codes, Telnyx status & WhatsApp status
         loadForwardingSetup();
         loadTelnyxStatus();
+        loadWhatsAppStatus();
+        setInterval(loadWhatsAppStatus, 5000);
 
       } catch (e) {
         console.warn('Backend init check warning:', e);

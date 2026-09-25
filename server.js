@@ -2197,6 +2197,32 @@ app.post("/api/calls/test-summary-sms", async (req, res) => {
 });
 
 // ==============================================
+// 10b. WhatsApp Personal Voice Agent Status
+// ==============================================
+app.get("/api/whatsapp/status", (req, res) => {
+  const statusFile = path.join(__dirname, "whatsapp-status.json");
+  const env = getEnv();
+  if (fs.existsSync(statusFile)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(statusFile, "utf-8"));
+      return res.json({
+        active: true,
+        ...data,
+        qrUrl: `http://localhost:${process.env.WHATSAPP_PORT || 3005}/qr`
+      });
+    } catch (e) {}
+  }
+  res.json({
+    active: false,
+    state: "not_started",
+    connected: false,
+    personalNumber: env.PERSONAL_PHONE_NUMBER || "+923154483615",
+    message: "WhatsApp Agent is not running. Start with: npm run whatsapp",
+    qrUrl: `http://localhost:${process.env.WHATSAPP_PORT || 3005}/qr`
+  });
+});
+
+// ==============================================
 // 11. Telnyx Telephony Status & Auto-Sync Endpoints
 // ==============================================
 
