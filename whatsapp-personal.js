@@ -2,19 +2,19 @@
  * =========================================================================
  *  WhatsApp Personal AI Voice Agent — Stage 6 ($0 Cost)
  * =========================================================================
- *  Connects directly to your personal WhatsApp number (+923154483615)
- *  via Baileys (@whiskeysockets/baileys) QR scan with ZERO Meta fees.
+ *  Connects to ANY personal WhatsApp number via QR scan. Whoever scans
+ *  the QR code from their phone will pair this agent to their account.
  *
  *  Core Capabilities:
- *    1. Incoming Call Interception: Detects WhatsApp calls, silences/rejects them,
- *       and immediately dispatches an authentic AI voice note on your behalf.
+ *    1. Incoming Call Interception: Detects WhatsApp calls, silences/rejects
+ *       them, and immediately dispatches an authentic AI voice note.
  *    2. Voice-to-Voice Notes (PTT): Downloads incoming voice messages (.ogg),
- *       transcribes via Groq Whisper STT, reasons with Groq Llama 3.3 70B,
- *       synthesizes speech with Microsoft Edge-TTS ($0.00), and sends back an
- *       Opus voice note.
+ *       transcribes via Groq Whisper STT, reasons with Groq LLM, synthesizes
+ *       speech with Microsoft Edge-TTS ($0.00), and sends back an Opus voice note.
  *    3. Multi-Turn Conversation Memory: Keeps context per contact.
- *    4. Web QR & Health Server (Port 3005): Scan QR from terminal OR browser!
+ *    4. Web QR & Health Server (Port 3005): Scan QR from terminal OR browser.
  *    5. Call History Sync: Persists transcripts & summaries to call-history.json.
+ *    6. Pakistan-focused: Supports Urdu and English voice interactions.
  * =========================================================================
  */
 
@@ -25,7 +25,8 @@ import makeWASocket, {
   downloadMediaMessage
 } from "@whiskeysockets/baileys";
 import pino from "pino";
-import qrcode from "qrcode-terminal";
+import qrcodeTerminal from "qrcode-terminal";
+import QRCode from "qrcode";
 import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
@@ -40,12 +41,11 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Configuration
+// ─── Configuration ───────────────────────────────────────────────────────────
 const GROQ_API_KEY = (process.env.GROQ_API_KEY || "").trim();
 const GROQ_LLM_MODEL = (process.env.GROQ_MODEL || process.env.GROQ_LLM_MODEL || "openai/gpt-oss-120b").trim();
 const GROQ_STT_MODEL = "whisper-large-v3-turbo";
 const EDGE_TTS_VOICE = (process.env.EDGE_TTS_VOICE || "en-US-AriaNeural").trim();
-const PERSONAL_PHONE_NUMBER = (process.env.PERSONAL_PHONE_NUMBER || "+923154483615").trim();
 const HTTP_PORT = parseInt(process.env.WHATSAPP_PORT || "3005", 10);
 const AUTH_DIR = path.join(__dirname, "auth_baileys");
 const CALL_HISTORY_FILE = path.join(__dirname, "call-history.json");
@@ -54,33 +54,45 @@ const STATUS_FILE = path.join(__dirname, "whatsapp-status.json");
 // Initialize Groq client
 const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
 
-// State management
+// ─── State Management ────────────────────────────────────────────────────────
 let sock = null;
-let currentQr = null;
-let connectionState = "disconnected"; // "connecting", "qr_ready", "connected", "disconnected"
-let botUser = null;
-const conversationHistory = new Map(); // remoteJid -> array of { role, content }
-const lastCallInterceptTime = new Map(); // remoteJid -> timestamp (rate limit auto-replies)
+let currentQrCode = null;           // Raw QR string for terminal
+let currentQrDataUrl = null;        // Base64 data URL for web rendering
+let connectionState = "disconnected"; // "connecting" | "qr_ready" | "connected" | "disconnected"
+let botUser = null;                   // The paired WhatsApp user info
+let reconnectAttempt = 0;             // Exponential backoff counter
+const MAX_RECONNECT_DELAY = 60000;    // Max 60s between reconnects
 
-// System prompt for the WhatsApp Voice Agent
-const SYSTEM_PROMPT = `You are a warm, articulate, and helpful AI voice assistant answering WhatsApp messages and calls on behalf of Husnain (${PERSONAL_PHONE_NUMBER}).
+const conversationHistory = new Map(); // remoteJid -> array of { role, content }
+const lastCallInterceptTime = new Map(); // remoteJid -> timestamp (rate limit)
+const activeProcessing = new Set();     // JIDs currently being processed (debounce)
+
+/**
+ * Build the system prompt dynamically based on the connected user
+ */
+function getSystemPrompt() {
+  const userName = botUser?.name || "the phone owner";
+  const userNumber = botUser?.id?.split(":")[0] || "this number";
+
+  return `You are a warm, articulate, and helpful AI voice assistant answering WhatsApp messages and calls on behalf of ${userName} (+${userNumber}).
 
 Guidelines:
 1. Speak concisely and conversationally (2 to 4 sentences maximum). Your words will be converted directly into spoken audio voice notes.
-2. If asked where Husnain is or why he didn't pick up the call, politely explain that he is currently unavailable and you are assisting on his behalf.
-3. You can answer questions, take messages for Husnain, or arrange for him to follow up.
-4. Crucial: NEVER use markdown symbols (no asterisks, no bullet points, no emojis in speech, no numbered lists, no URLs) because your response will be read aloud as audio. Speak naturally as if leaving a friendly voice message.`;
+2. If asked where ${userName} is or why they didn't pick up the call, politely explain that they are currently unavailable and you are assisting on their behalf.
+3. You can answer questions, take messages for ${userName}, or arrange for them to follow up.
+4. If someone speaks in Urdu or Roman Urdu, respond in simple, natural Urdu transliterated to Roman script.
+5. Crucial: NEVER use markdown symbols (no asterisks, no bullet points, no emojis in speech, no numbered lists, no URLs) because your response will be read aloud as audio. Speak naturally as if leaving a friendly voice message.`;
+}
 
-/**
- * Update and persist current WhatsApp agent status
- */
+// ─── Status Persistence ──────────────────────────────────────────────────────
+
 function updateStatus(state, extra = {}) {
   connectionState = state;
   const statusData = {
     state,
     connected: state === "connected",
     botUser: botUser ? botUser.id : null,
-    personalNumber: PERSONAL_PHONE_NUMBER,
+    userName: botUser?.name || null,
     timestamp: new Date().toISOString(),
     conversationsCount: conversationHistory.size,
     ...extra
@@ -89,44 +101,49 @@ function updateStatus(state, extra = {}) {
   try {
     fs.writeFileSync(STATUS_FILE, JSON.stringify(statusData, null, 2), "utf-8");
   } catch (err) {
-    console.warn("[STATUS ERROR] Failed to write status file:", err.message);
+    // Non-critical — just log
+    console.warn("[STATUS] Could not write status file:", err.message);
   }
 }
 
-/**
- * Save call or voice note interaction to call-history.json
- */
+// ─── Call History ─────────────────────────────────────────────────────────────
+
 function logCallRecord(record) {
   try {
     let history = [];
     if (fs.existsSync(CALL_HISTORY_FILE)) {
-      const raw = fs.readFileSync(CALL_HISTORY_FILE, "utf-8");
-      history = JSON.parse(raw);
+      try {
+        const raw = fs.readFileSync(CALL_HISTORY_FILE, "utf-8");
+        history = JSON.parse(raw);
+        if (!Array.isArray(history)) history = [];
+      } catch (_parseErr) {
+        history = [];
+      }
     }
+
     history.unshift({
       callSid: `WA_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      callerNumber: record.callerNumber,
+      callerNumber: record.callerNumber || "unknown",
       channel: "WhatsApp",
       type: record.type || "Call Intercept",
       startTime: record.startTime || new Date().toISOString(),
       endTime: new Date().toISOString(),
       durationSeconds: record.durationSeconds || 0,
       transcript: record.transcript || [],
-      summary: record.summary || "WhatsApp call intercepted by AI voice agent.",
+      summary: record.summary || "WhatsApp interaction handled by AI voice agent.",
       smsSent: false
     });
 
     if (history.length > 50) history = history.slice(0, 50);
     fs.writeFileSync(CALL_HISTORY_FILE, JSON.stringify(history, null, 2), "utf-8");
-    console.log(`[CALL HISTORY] Saved record for ${record.callerNumber}`);
+    console.log(`[CALL LOG] Saved record for ${record.callerNumber}`);
   } catch (err) {
-    console.error("[CALL HISTORY ERROR]", err.message);
+    console.error("[CALL LOG ERROR]", err.message);
   }
 }
 
-/**
- * Retrieve or create conversation history for a contact
- */
+// ─── Conversation Memory ─────────────────────────────────────────────────────
+
 function getHistory(jid) {
   if (!conversationHistory.has(jid)) {
     conversationHistory.set(jid, []);
@@ -137,35 +154,41 @@ function getHistory(jid) {
 function appendHistory(jid, role, content) {
   const history = getHistory(jid);
   history.push({ role, content });
+  // Keep last 16 turns to stay within token limits
   if (history.length > 16) {
     conversationHistory.set(jid, history.slice(-16));
   }
 }
 
-/**
- * Generate AI voice greeting and send to caller when a live call is intercepted
- */
+// ─── Call Interception Handler ───────────────────────────────────────────────
+
 async function handleCallInterception(call) {
+  if (!call || !call.from) {
+    console.warn("[CALL] Received call event without 'from' field, skipping.");
+    return;
+  }
+
   const callerJid = call.from;
   const callerNumber = callerJid.split("@")[0];
 
-  console.log(`\n=============================================================`);
-  console.log(`📞 [CALL INTERCEPTED] Incoming WhatsApp call from: +${callerNumber}`);
-  console.log(`=============================================================`);
+  console.log(`\n${"=".repeat(60)}`);
+  console.log(`  CALL INTERCEPTED — Incoming from: +${callerNumber}`);
+  console.log(`${"=".repeat(60)}`);
 
-  // Rate-limit call auto-responses to once every 2 minutes per caller
+  // Rate-limit: max one auto-response per caller every 2 minutes
   const now = Date.now();
   const lastTime = lastCallInterceptTime.get(callerJid) || 0;
-  if (now - lastTime < 120000) {
-    console.log(`[CALL NOTICE] Call auto-response rate-limited for +${callerNumber}`);
+  if (now - lastTime < 120_000) {
+    console.log(`[CALL] Rate-limited auto-response for +${callerNumber}`);
     return;
   }
   lastCallInterceptTime.set(callerJid, now);
 
-  const greetingText = `Hello! You've reached Husnain's AI voice assistant. I am answering on his behalf. I'm currently taking voice messages. Please hold down the microphone button right here in this chat and leave your voice note, and I will assist you or notify Husnain immediately!`;
+  const userName = botUser?.name || "the phone owner";
+  const greetingText = `Hello! You have reached ${userName}'s AI voice assistant. I am answering on their behalf because they are currently unavailable. Please hold down the microphone button right here in this chat and leave your voice note, and I will assist you or notify ${userName} immediately.`;
 
   try {
-    console.log(`👄 Synthesizing AI call-interception voice note via Edge-TTS...`);
+    console.log(`[TTS] Synthesizing call-interception voice note...`);
     const oggBuffer = await synthesizeToWhatsAppOpus(greetingText, EDGE_TTS_VOICE);
 
     // Send native WhatsApp Voice Note (PTT)
@@ -175,14 +198,13 @@ async function handleCallInterception(call) {
       ptt: true
     });
 
-    // Also send companion text message for visual confirmation
+    // Also send text for visual confirmation
     await sock.sendMessage(callerJid, {
-      text: `📞 *Missed Call Handled by AI*\n\nHi! I am Husnain's AI assistant answering on his behalf. Please leave a *voice note* 🎤 right here in this chat, and I'll listen and assist you immediately!`
+      text: `Hi! I am ${userName}'s AI assistant. They are currently unavailable. Please leave a voice note here and I'll listen and assist you right away.`
     });
 
-    console.log(`✅ [VOICE NOTE SENT] Call interception audio delivered to +${callerNumber}`);
+    console.log(`[CALL] Voice note delivered to +${callerNumber}`);
 
-    // Log to call history
     logCallRecord({
       callerNumber: `+${callerNumber}`,
       type: "WhatsApp Call (Auto-Intercepted)",
@@ -190,36 +212,77 @@ async function handleCallInterception(call) {
         { role: "system", text: "Incoming WhatsApp call intercepted and silenced." },
         { role: "assistant", text: greetingText }
       ],
-      summary: `Incoming WhatsApp call from +${callerNumber} was intercepted by the AI voice assistant. An audio greeting requesting a voice note was sent.`
+      summary: `Call from +${callerNumber} intercepted. AI greeting sent.`
     });
   } catch (err) {
-    console.error(`❌ [CALL INTERCEPTION ERROR] Failed to send voice note to +${callerNumber}:`, err.message);
+    console.error(`[CALL ERROR] Failed to send voice note to +${callerNumber}:`, err.message);
   }
 }
 
-/**
- * Handle incoming audio (voice note) or text messages
- */
+// ─── Message Handler ─────────────────────────────────────────────────────────
+
 async function handleIncomingMessage(msg) {
+  // Defensive null checks
+  if (!msg || !msg.key || !msg.key.remoteJid) return;
+
   const jid = msg.key.remoteJid;
-  if (!jid || jid.endsWith("@g.us") || msg.key.fromMe) {
-    // Ignore group chats or messages sent by the bot itself
+
+  // Skip: group chats, broadcast, status updates, own messages
+  if (
+    jid.endsWith("@g.us") ||
+    jid.endsWith("@broadcast") ||
+    jid === "status@broadcast" ||
+    msg.key.fromMe
+  ) {
     return;
   }
 
+  // Skip if no message payload
+  if (!msg.message) return;
+
+  // Debounce: prevent duplicate processing if a message arrives while we're still replying
+  if (activeProcessing.has(jid)) {
+    console.log(`[MSG] Already processing a message for ${jid}, queuing...`);
+    return;
+  }
+
+  activeProcessing.add(jid);
+
+  try {
+    await _processMessage(msg, jid);
+  } catch (err) {
+    console.error(`[MSG ERROR] Unhandled error for ${jid}:`, err.message);
+  } finally {
+    activeProcessing.delete(jid);
+  }
+}
+
+async function _processMessage(msg, jid) {
   const senderNumber = jid.split("@")[0];
-  const messageType = Object.keys(msg.message || {})[0];
+
+  // Determine message type safely
+  const messageKeys = Object.keys(msg.message || {});
+  // Filter out protocol-level keys
+  const contentKey = messageKeys.find(k =>
+    ["audioMessage", "conversation", "extendedTextMessage", "imageMessage", "videoMessage", "documentMessage", "stickerMessage"].includes(k)
+  );
 
   let userText = "";
   let isAudio = false;
 
-  // 1. Check if message is a Voice Note or Audio
-  if (messageType === "audioMessage") {
+  // ── Audio / Voice Note ──────────────────────────────────────────────────
+  if (contentKey === "audioMessage") {
     isAudio = true;
-    console.log(`\n🎤 [VOICE NOTE RECEIVED] From +${senderNumber}`);
+    console.log(`\n[VOICE] Incoming voice note from +${senderNumber}`);
+
+    if (!groq) {
+      console.error("[VOICE] Groq API key not configured — cannot transcribe.");
+      await safeSendText(jid, "I'm sorry, I cannot process voice notes right now. Please type your message instead.");
+      return;
+    }
 
     try {
-      console.log(`⬇️ Downloading WhatsApp audio buffer...`);
+      console.log(`[VOICE] Downloading audio buffer...`);
       const buffer = await downloadMediaMessage(
         msg,
         "buffer",
@@ -228,11 +291,11 @@ async function handleIncomingMessage(msg) {
       );
 
       if (!buffer || buffer.length === 0) {
-        console.warn(`[AUDIO WARNING] Empty audio buffer received`);
+        console.warn(`[VOICE] Empty audio buffer from +${senderNumber}`);
         return;
       }
 
-      console.log(`👂 Transcribing voice note via Groq Whisper (${GROQ_STT_MODEL})...`);
+      console.log(`[STT] Transcribing via Groq Whisper (${buffer.length} bytes)...`);
       const audioFile = await toFile(buffer, "voice.ogg", { type: "audio/ogg" });
       const transcription = await groq.audio.transcriptions.create({
         file: audioFile,
@@ -241,41 +304,48 @@ async function handleIncomingMessage(msg) {
       });
 
       userText = (transcription.text || "").trim();
-      console.log(`   ✅ Transcribed: "${userText}"`);
+      console.log(`[STT] Result: "${userText}"`);
 
       if (!userText) {
-        await sock.sendMessage(jid, {
-          text: "I couldn't hear that voice note clearly. Could you please send it again? 🎤"
-        });
+        await safeSendText(jid, "I couldn't hear that voice note clearly. Could you please send it again?");
         return;
       }
     } catch (sttErr) {
-      console.error(`❌ [STT ERROR]`, sttErr.message);
-      await sock.sendMessage(jid, {
-        text: "I had trouble transcribing your voice note. Please try again or type your message!"
-      });
+      console.error(`[STT ERROR]`, sttErr.message);
+      await safeSendText(jid, "I had trouble understanding your voice note. Please try again or type your message.");
       return;
     }
-  } else if (messageType === "conversation" || messageType === "extendedTextMessage") {
-    userText = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").trim();
-    console.log(`\n💬 [TEXT RECEIVED] From +${senderNumber}: "${userText}"`);
+
+  // ── Text Message ────────────────────────────────────────────────────────
+  } else if (contentKey === "conversation" || contentKey === "extendedTextMessage") {
+    userText = (
+      msg.message?.conversation ||
+      msg.message?.extendedTextMessage?.text ||
+      ""
+    ).trim();
+
+    if (!userText) return;
+    console.log(`\n[TEXT] From +${senderNumber}: "${userText}"`);
+
+  // ── Unsupported media (images, stickers, etc.) — ignore silently ──────
   } else {
-    // Other unsupported formats (stickers, images)
     return;
   }
 
   if (!userText) return;
 
-  // Append user message to history
+  // Append user message to conversation memory
   appendHistory(jid, "user", userText);
 
-  // 2. Query Groq LLM for AI response
+  // ── LLM Response ──────────────────────────────────────────────────────
   let aiReplyText = "";
   try {
-    console.log(`🧠 Generating response with Groq LLM (${GROQ_LLM_MODEL})...`);
+    if (!groq) throw new Error("Groq API not configured");
+
+    console.log(`[LLM] Generating response (${GROQ_LLM_MODEL})...`);
     const history = getHistory(jid);
     const messages = [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: getSystemPrompt() },
       ...history
     ];
 
@@ -287,20 +357,24 @@ async function handleIncomingMessage(msg) {
       ...(GROQ_LLM_MODEL.includes("gpt-oss") ? { reasoning_effort: "low" } : {})
     });
 
-    aiReplyText = (completion.choices[0]?.message?.content || "").trim();
-    console.log(`   ✅ AI Response: "${aiReplyText}"`);
+    aiReplyText = (completion.choices?.[0]?.message?.content || "").trim();
+
+    if (!aiReplyText) {
+      aiReplyText = "I received your message. Let me get back to you shortly.";
+    }
+
+    console.log(`[LLM] Response: "${aiReplyText}"`);
     appendHistory(jid, "assistant", aiReplyText);
   } catch (llmErr) {
-    console.error(`❌ [LLM ERROR]`, llmErr.message);
-    aiReplyText = "I'm having a brief connection delay. I have noted your message for Husnain and he will get back to you shortly.";
+    console.error(`[LLM ERROR]`, llmErr.message);
+    aiReplyText = "I am having a brief connection delay. I have noted your message and will follow up shortly.";
   }
 
-  // 3. Synthesize Speech and Send WhatsApp Voice Note
+  // ── TTS Synthesis & Send Voice Note ───────────────────────────────────
   try {
-    console.log(`👄 Synthesizing voice note reply with Edge-TTS (${EDGE_TTS_VOICE})...`);
+    console.log(`[TTS] Synthesizing reply with Edge-TTS (${EDGE_TTS_VOICE})...`);
     const oggBuffer = await synthesizeToWhatsAppOpus(aiReplyText, EDGE_TTS_VOICE);
 
-    // Send native WhatsApp Voice Note (PTT)
     await sock.sendMessage(
       jid,
       {
@@ -311,9 +385,8 @@ async function handleIncomingMessage(msg) {
       { quoted: msg }
     );
 
-    console.log(`🚀 [VOICE NOTE DELIVERED] Replied to +${senderNumber} with voice note!`);
+    console.log(`[SENT] Voice note delivered to +${senderNumber}`);
 
-    // Log to call history
     logCallRecord({
       callerNumber: `+${senderNumber}`,
       type: isAudio ? "WhatsApp Voice Note Exchange" : "WhatsApp Chat Exchange",
@@ -321,66 +394,124 @@ async function handleIncomingMessage(msg) {
         { role: "user", text: userText },
         { role: "assistant", text: aiReplyText }
       ],
-      summary: `User asked: "${userText}". AI Voice Assistant responded: "${aiReplyText}".`
+      summary: `User: "${userText}". AI: "${aiReplyText}".`
     });
   } catch (ttsErr) {
-    console.error(`❌ [TTS/DELIVERY ERROR]`, ttsErr.message);
-    // Graceful fallback to text if audio synthesis failed
-    await sock.sendMessage(jid, { text: aiReplyText }, { quoted: msg });
+    console.error(`[TTS ERROR]`, ttsErr.message);
+    // Fallback: send as text message if voice synthesis fails
+    await safeSendText(jid, aiReplyText, msg);
   }
 }
 
 /**
- * Initialize Baileys Socket connection
+ * Safe text sender — won't crash if socket is dead
  */
+async function safeSendText(jid, text, quotedMsg = null) {
+  try {
+    const opts = quotedMsg ? { quoted: quotedMsg } : {};
+    await sock.sendMessage(jid, { text }, opts);
+  } catch (err) {
+    console.error(`[SEND ERROR] Could not send text to ${jid}:`, err.message);
+  }
+}
+
+// ─── Baileys Socket Initialization ───────────────────────────────────────────
+
 async function startWhatsAppBot() {
   updateStatus("connecting");
-  console.log("\n========================================================");
-  console.log("  🚀 Starting Personal WhatsApp AI Voice Agent Service");
-  console.log("========================================================\n");
 
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-  const { version } = await fetchLatestBaileysVersion();
+  console.log(`\n${"=".repeat(60)}`);
+  console.log("  WhatsApp AI Voice Agent — Starting...");
+  console.log(`${"=".repeat(60)}\n`);
 
-  console.log(`[BAILEYS] Using WhatsApp Web version: ${version.join(".")}`);
+  // Ensure auth directory exists
+  if (!fs.existsSync(AUTH_DIR)) {
+    fs.mkdirSync(AUTH_DIR, { recursive: true });
+  }
+
+  let state, saveCreds;
+  try {
+    ({ state, saveCreds } = await useMultiFileAuthState(AUTH_DIR));
+  } catch (authErr) {
+    console.error("[AUTH ERROR] Failed to load auth state:", authErr.message);
+    console.log("[AUTH] Clearing corrupted auth data and retrying...");
+    try {
+      fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+      fs.mkdirSync(AUTH_DIR, { recursive: true });
+      ({ state, saveCreds } = await useMultiFileAuthState(AUTH_DIR));
+    } catch (retryErr) {
+      console.error("[AUTH FATAL] Cannot initialize auth:", retryErr.message);
+      process.exit(1);
+    }
+  }
+
+  let version;
+  try {
+    ({ version } = await fetchLatestBaileysVersion());
+  } catch (_) {
+    version = [2, 3000, 1015901307]; // Fallback version
+  }
+
+  console.log(`[BAILEYS] WhatsApp Web version: ${version.join(".")}`);
 
   sock = makeWASocket({
     version,
     auth: state,
-    logger: pino({ level: "silent" }), // Silent logger avoids terminal noise
-    printQRInTerminal: false, // We render QR code manually using qrcode-terminal
+    logger: pino({ level: "silent" }),
+    printQRInTerminal: false,
     browser: ["VoiceAgent-AI", "Chrome", "1.0.0"],
-    syncFullHistory: false
+    syncFullHistory: false,
+    connectTimeoutMs: 30_000,
+    defaultQueryTimeoutMs: 60_000
   });
 
   sock.ev.on("creds.update", saveCreds);
 
-  // 1. Connection updates & QR Code handling
-  sock.ev.on("connection.update", (update) => {
+  // ── Connection Updates & QR ─────────────────────────────────────────────
+  sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      currentQr = qr;
+      currentQrCode = qr;
+      reconnectAttempt = 0; // Reset backoff on new QR
+
+      // Generate data URL for the web UI
+      try {
+        currentQrDataUrl = await QRCode.toDataURL(qr, {
+          width: 320,
+          margin: 2,
+          color: { dark: "#e2e8f0", light: "#0f172a" }
+        });
+      } catch (qrErr) {
+        console.warn("[QR] Could not generate QR data URL:", qrErr.message);
+        currentQrDataUrl = null;
+      }
+
       updateStatus("qr_ready", { qr });
-      console.log("\n📲 [ACTION REQUIRED] Scan this QR Code with your WhatsApp:");
-      console.log("   1. Open WhatsApp on your phone (+923154483615)");
-      console.log("   2. Tap Settings ⚙️ (or 3 dots) → Linked Devices");
-      console.log("   3. Tap 'Link a Device' and point camera here:\n");
 
-      qrcode.generate(qr, { small: true });
-
-      console.log(`\n🌐 Or open in browser: http://localhost:${HTTP_PORT}/qr\n`);
+      console.log("\n  Scan this QR Code with WhatsApp:");
+      console.log("  1. Open WhatsApp on your phone");
+      console.log("  2. Go to Settings > Linked Devices");
+      console.log("  3. Tap 'Link a Device' and scan:\n");
+      qrcodeTerminal.generate(qr, { small: true });
+      console.log(`\n  Or open: http://localhost:${HTTP_PORT}/qr\n`);
     }
 
     if (connection === "open") {
       botUser = sock.user;
-      currentQr = null;
+      currentQrCode = null;
+      currentQrDataUrl = null;
+      reconnectAttempt = 0;
       updateStatus("connected", { user: botUser });
-      console.log("\n========================================================");
-      console.log(`🟢 WhatsApp Voice Agent Connected & Online!`);
-      console.log(`📱 User: ${botUser?.name || "Husnain"} (+${botUser?.id?.split(":")[0]})`);
-      console.log(`👂 Listening for incoming calls and voice notes 24/7...`);
-      console.log("========================================================\n");
+
+      const userName = botUser?.name || "Unknown";
+      const userNum = botUser?.id?.split(":")[0] || "N/A";
+
+      console.log(`\n${"=".repeat(60)}`);
+      console.log(`  CONNECTED — WhatsApp AI Voice Agent Online`);
+      console.log(`  User: ${userName} (+${userNum})`);
+      console.log(`  Listening for calls & voice notes 24/7...`);
+      console.log(`${"=".repeat(60)}\n`);
     }
 
     if (connection === "close") {
@@ -388,118 +519,320 @@ async function startWhatsAppBot() {
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
       updateStatus("disconnected", { statusCode, shouldReconnect });
 
-      console.log(`⚠️ Connection closed (code: ${statusCode}). Reconnecting: ${shouldReconnect}`);
-
       if (shouldReconnect) {
-        setTimeout(startWhatsAppBot, 3000);
+        // Exponential backoff: 3s, 6s, 12s, 24s, ... up to 60s
+        reconnectAttempt++;
+        const delay = Math.min(3000 * Math.pow(2, reconnectAttempt - 1), MAX_RECONNECT_DELAY);
+        console.log(`[RECONNECT] Connection closed (code: ${statusCode}). Retrying in ${delay / 1000}s...`);
+        setTimeout(startWhatsAppBot, delay);
       } else {
-        console.log("❌ Logged out from WhatsApp. Clear 'auth_baileys' folder to pair again.");
+        console.log("[DISCONNECTED] Logged out from WhatsApp.");
+        console.log("[DISCONNECTED] Delete the 'auth_baileys' folder and restart to pair a new number.");
+        currentQrCode = null;
+        currentQrDataUrl = null;
+        botUser = null;
       }
     }
   });
 
-  // 2. Incoming Call Interception
+  // ── Call Interception ───────────────────────────────────────────────────
   sock.ev.on("call", async (calls) => {
+    if (!Array.isArray(calls)) return;
+
     for (const call of calls) {
-      if (call.status === "offer") {
-        try {
-          // Reject/silence the call
-          await sock.rejectCall(call.id, call.from);
-          // Auto-respond with AI voice note
+      try {
+        if (call && call.status === "offer" && call.from) {
+          await sock.rejectCall(call.id, call.from).catch(() => {});
           await handleCallInterception(call);
-        } catch (callErr) {
-          console.error("[CALL HANDLER ERROR]", callErr.message);
         }
+      } catch (callErr) {
+        console.error("[CALL ERROR]", callErr.message);
       }
     }
   });
 
-  // 3. Incoming Messages (Voice Notes & Text)
+  // ── Message Reception ─────────────────────────────────────────────────
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify") return;
+    if (!Array.isArray(messages)) return;
+
     for (const msg of messages) {
       try {
         await handleIncomingMessage(msg);
       } catch (msgErr) {
-        console.error("[MESSAGE HANDLER ERROR]", msgErr.message);
+        console.error("[MSG HANDLER ERROR]", msgErr.message);
       }
     }
   });
 }
 
-/**
- * Web QR & Status Server (Port 3005)
- */
-const server = http.createServer((req, res) => {
+// ─── Web Server (QR + Status) ────────────────────────────────────────────────
+
+const httpServer = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
+  // ── JSON Status Endpoint ──────────────────────────────────────────────
   if (url.pathname === "/status") {
-    res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-    res.end(JSON.stringify({
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*"
+    });
+    return res.end(JSON.stringify({
       status: connectionState,
       connected: connectionState === "connected",
-      user: botUser,
-      personalNumber: PERSONAL_PHONE_NUMBER,
+      user: botUser ? { id: botUser.id, name: botUser.name } : null,
       activeConversations: conversationHistory.size
     }));
+  }
+
+  // ── Logout / Reset Endpoint ───────────────────────────────────────────
+  if (url.pathname === "/logout") {
+    try {
+      sock?.logout?.().catch(() => {});
+      fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+      fs.mkdirSync(AUTH_DIR, { recursive: true });
+      botUser = null;
+      currentQrCode = null;
+      currentQrDataUrl = null;
+      connectionState = "disconnected";
+      updateStatus("disconnected", { reason: "manual_logout" });
+
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, message: "Logged out. Restart the agent to pair a new number." }));
+
+      // Restart to get a fresh QR
+      setTimeout(() => {
+        console.log("[LOGOUT] Restarting for fresh QR...");
+        startWhatsAppBot().catch(console.error);
+      }, 2000);
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: err.message }));
+    }
     return;
   }
 
+  // ── QR Page / Landing Page ────────────────────────────────────────────
   if (url.pathname === "/qr" || url.pathname === "/") {
-    res.writeHead(200, { "Content-Type": "text/html" });
-    res.end(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>WhatsApp Voice Agent — QR Link</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          body { font-family: -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; text-align: center; }
-          .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 28px; max-width: 440px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-          h1 { font-size: 1.4rem; color: #38bdf8; margin-bottom: 8px; }
-          p { color: #94a3b8; font-size: 0.9rem; margin-bottom: 20px; }
-          .badge { display: inline-block; padding: 6px 12px; border-radius: 9999px; font-weight: 600; font-size: 0.8rem; margin-bottom: 16px; }
-          .badge-connected { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
-          .badge-waiting { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; }
-          pre { background: #020617; padding: 16px; border-radius: 8px; font-size: 10px; line-height: 10px; overflow-x: auto; color: #38bdf8; }
-          .steps { text-align: left; background: #0f172a; padding: 14px 18px; border-radius: 10px; font-size: 0.82rem; color: #cbd5e1; line-height: 1.6; margin-top: 16px; }
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <h1>🤖 WhatsApp AI Voice Agent</h1>
-          <p>Answering calls & voice notes for <strong>${PERSONAL_PHONE_NUMBER}</strong></p>
-          ${
-            connectionState === "connected"
-              ? `<div class="badge badge-connected">🟢 Connected & Online</div><p>Your WhatsApp is paired! The AI voice agent is actively answering incoming calls and voice notes.</p>`
-              : `<div class="badge badge-waiting">📲 QR Code Ready to Scan</div>
-                 <div class="steps">
-                   <strong>How to Pair:</strong><br>
-                   1. Open WhatsApp on your phone.<br>
-                   2. Go to <strong>Settings ⚙️ → Linked Devices</strong>.<br>
-                   3. Tap <strong>Link a Device</strong> and scan the terminal QR code.
-                 </div>
-                 <p style="margin-top:16px; font-size: 0.78rem;">Status auto-refreshes every 4s</p>`
-          }
+    res.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-cache, no-store"
+    });
+
+    const isConnected = connectionState === "connected";
+    const userName = botUser?.name || "Unknown";
+    const userNum = botUser?.id?.split(":")[0] || "";
+
+    res.end(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Voice Agent</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0a0a0f;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: linear-gradient(145deg, #12121a 0%, #1a1a2e 100%);
+      border: 1px solid rgba(99, 102, 241, 0.15);
+      border-radius: 20px;
+      padding: 36px;
+      max-width: 460px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(99, 102, 241, 0.05);
+    }
+    .logo { font-size: 2.4rem; margin-bottom: 8px; }
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #818cf8, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+    .subtitle { color: #94a3b8; font-size: 0.88rem; margin-bottom: 24px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 0.82rem;
+      margin-bottom: 20px;
+    }
+    .badge-connected {
+      background: rgba(16, 185, 129, 0.12);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .badge-waiting {
+      background: rgba(245, 158, 11, 0.12);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .badge-connected .badge-dot { background: #34d399; box-shadow: 0 0 8px #34d399; }
+    .badge-waiting .badge-dot { background: #fbbf24; animation: pulse 2s infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .qr-container {
+      background: #0f172a;
+      border-radius: 14px;
+      padding: 20px;
+      margin: 16px auto;
+      display: inline-block;
+    }
+    .qr-container img {
+      width: 280px;
+      height: 280px;
+      border-radius: 8px;
+    }
+    .steps {
+      text-align: left;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(51, 65, 85, 0.4);
+      padding: 16px 20px;
+      border-radius: 12px;
+      font-size: 0.82rem;
+      color: #cbd5e1;
+      line-height: 1.7;
+      margin-top: 16px;
+    }
+    .steps strong { color: #e2e8f0; }
+    .steps .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(99, 102, 241, 0.2);
+      color: #818cf8;
+      font-size: 0.7rem;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+    .info-connected {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 16px;
+    }
+    .info-connected .user-name { font-size: 1.1rem; font-weight: 600; color: #f1f5f9; }
+    .info-connected .user-num { color: #94a3b8; font-size: 0.85rem; }
+    .info-connected .features {
+      margin-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      text-align: left;
+      font-size: 0.82rem;
+      color: #94a3b8;
+    }
+    .info-connected .features span { color: #34d399; margin-right: 6px; }
+    .logout-btn {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 10px 24px;
+      background: rgba(239, 68, 68, 0.12);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    .logout-btn:hover { background: rgba(239, 68, 68, 0.25); }
+    .refresh-note { color: #475569; font-size: 0.72rem; margin-top: 14px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">${isConnected ? "&#x1F7E2;" : "&#x1F4F2;"}</div>
+    <h1>WhatsApp AI Voice Agent</h1>
+    <p class="subtitle">Zero-cost AI assistant for your WhatsApp</p>
+
+    ${isConnected ? `
+      <div class="badge badge-connected"><span class="badge-dot"></span> Connected &amp; Online</div>
+      <div class="info-connected">
+        <div class="user-name">${escapeHtml(userName)}</div>
+        <div class="user-num">+${escapeHtml(userNum)}</div>
+        <div class="features">
+          <div><span>&#x2713;</span> Intercepting incoming calls</div>
+          <div><span>&#x2713;</span> Processing voice notes with AI</div>
+          <div><span>&#x2713;</span> Replying to text messages</div>
+          <div><span>&#x2713;</span> Multi-turn conversation memory</div>
         </div>
-        <script>
-          setTimeout(() => location.reload(), 4000);
-        </script>
-      </body>
-      </html>
-    `);
+      </div>
+      <a href="/logout" class="logout-btn" onclick="return confirm('Disconnect this WhatsApp account?')">Disconnect &amp; Pair New Number</a>
+    ` : `
+      <div class="badge badge-waiting"><span class="badge-dot"></span> Waiting for QR Scan</div>
+      ${currentQrDataUrl
+        ? `<div class="qr-container"><img src="${currentQrDataUrl}" alt="Scan this QR code with WhatsApp" /></div>`
+        : `<div class="qr-container" style="padding:40px;color:#64748b;">Generating QR code...</div>`
+      }
+      <div class="steps">
+        <strong>How to pair your WhatsApp:</strong><br><br>
+        <div><span class="step-num">1</span> Open WhatsApp on your phone</div>
+        <div><span class="step-num">2</span> Go to <strong>Settings</strong> &rarr; <strong>Linked Devices</strong></div>
+        <div><span class="step-num">3</span> Tap <strong>Link a Device</strong> and scan the QR code above</div>
+      </div>
+      <p class="refresh-note">Page auto-refreshes every 4 seconds</p>
+    `}
+  </div>
+  <script>
+    ${isConnected ? "" : "setTimeout(() => location.reload(), 4000);"}
+  </script>
+</body>
+</html>`);
     return;
   }
 
-  res.writeHead(404);
+  res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
   res.end("Not Found");
 });
 
-server.listen(HTTP_PORT, () => {
-  console.log(`🌐 WhatsApp Agent Status & Web UI: http://localhost:${HTTP_PORT}/qr`);
+/**
+ * HTML-escape to prevent XSS in dynamic content
+ */
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// ─── Launch ──────────────────────────────────────────────────────────────────
+
+httpServer.listen(HTTP_PORT, () => {
+  console.log(`[WEB] QR & Status page: http://localhost:${HTTP_PORT}/qr`);
 });
 
-// Launch bot
 startWhatsAppBot().catch((err) => {
-  console.error("❌ Fatal WhatsApp Bot Error:", err);
+  console.error("[FATAL]", err);
+  process.exit(1);
 });

@@ -1,5 +1,26 @@
 [
   {
+    "callSid": "WA_1790323115314_lygu",
+    "callerNumber": "+39814900486311",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Call (Auto-Intercepted)",
+    "startTime": "2026-09-25T07:58:35.314Z",
+    "endTime": "2026-09-25T07:58:35.314Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call intercepted and silenced."
+      },
+      {
+        "role": "assistant",
+        "text": "Hello! You have reached husnain bhatti's AI voice assistant. I am answering on their behalf because they are currently unavailable. Please hold down the microphone button right here in this chat and leave your voice note, and I will assist you or notify husnain bhatti immediately."
+      }
+    ],
+    "summary": "Call from +39814900486311 intercepted. AI greeting sent.",
+    "smsSent": false
+  },
+  {
     "callSid": "CA_test_call_a5qizf",
     "callerNumber": "Unknown",
     "forwardedFrom": null,

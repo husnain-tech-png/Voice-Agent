@@ -1,9 +1,13 @@
 {
-  "state": "qr_ready",
-  "connected": false,
-  "botUser": null,
-  "personalNumber": "+923154483615",
-  "timestamp": "2026-09-25T07:33:53.981Z",
+  "state": "connected",
+  "connected": true,
+  "botUser": "923154483615:40@s.whatsapp.net",
+  "userName": "husnain bhatti",
+  "timestamp": "2026-09-25T07:57:30.320Z",
   "conversationsCount": 0,
-  "qr": "https://wa.me/settings/linked_devices#2@x4MrlsKjwdNdJXcnwZ3MLe7Hg7wNJXq+qPct5gJKN0pqUJLNsC3VxB0CiyIDmXAXnFe8r6UfyGnMIGzgYfEL3ZneVnjGfx3uvNU=,0TS/g1wQwt7oPKlg5KmBLpHFCaS0yl/PcSCEiUJTGVk=,PYq2r5ZPKqeCWkinpV2HAWVrHoFvnXpkAi2+dCGPEgg=,3EqICCCJ9H0WHOX6tH5thubIVDBNWk9qf61mxiAdSak=,1"
+  "user": {
+    "id": "923154483615:40@s.whatsapp.net",
+    "name": "husnain bhatti",
+    "lid": "141081236750502:40@lid"
+  }
 }
