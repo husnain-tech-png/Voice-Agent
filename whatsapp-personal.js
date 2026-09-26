@@ -45,11 +45,16 @@ const __dirname = path.dirname(__filename);
 const GROQ_API_KEY = (process.env.GROQ_API_KEY || "").trim();
 const GROQ_LLM_MODEL = (process.env.GROQ_MODEL || process.env.GROQ_LLM_MODEL || "openai/gpt-oss-120b").trim();
 const GROQ_STT_MODEL = "whisper-large-v3-turbo";
-const EDGE_TTS_VOICE = (process.env.EDGE_TTS_VOICE || "en-US-AriaNeural").trim();
+const ELEVENLABS_VOICE_ID = (process.env.ELEVENLABS_VOICE_ID || "IKne3meq5aSn9XLyUdCD").trim();
 const HTTP_PORT = parseInt(process.env.WHATSAPP_PORT || "3005", 10);
 const AUTH_DIR = path.join(__dirname, "auth_baileys");
 const CALL_HISTORY_FILE = path.join(__dirname, "call-history.json");
 const STATUS_FILE = path.join(__dirname, "whatsapp-status.json");
+
+function getPublicTestUrl() {
+  dotenv.config({ override: true });
+  return (process.env.PUBLIC_URL || "http://localhost:3000").trim();
+}
 
 // Initialize Groq client
 const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
@@ -71,17 +76,24 @@ const activeProcessing = new Set();     // JIDs currently being processed (debou
  * Build the system prompt dynamically based on the connected user
  */
 function getSystemPrompt() {
-  const userName = botUser?.name || "the phone owner";
-  const userNumber = botUser?.id?.split(":")[0] || "this number";
+  const userName = botUser?.name || "Husnain";
+  const userNumber = botUser?.id?.split(":")[0] || "923154483615";
 
-  return `You are a warm, articulate, and helpful AI voice assistant answering WhatsApp messages and calls on behalf of ${userName} (+${userNumber}).
+  return `You are Charlie, a polite, warm, articulate, and intelligent male AI voice assistant answering WhatsApp messages and calls on behalf of ${userName} (+${userNumber}).
 
-Guidelines:
-1. Speak concisely and conversationally (2 to 4 sentences maximum). Your words will be converted directly into spoken audio voice notes.
-2. If asked where ${userName} is or why they didn't pick up the call, politely explain that they are currently unavailable and you are assisting on their behalf.
-3. You can answer questions, take messages for ${userName}, or arrange for them to follow up.
-4. If someone speaks in Urdu or Roman Urdu, respond in simple, natural Urdu transliterated to Roman script.
-5. Crucial: NEVER use markdown symbols (no asterisks, no bullet points, no emojis in speech, no numbered lists, no URLs) because your response will be read aloud as audio. Speak naturally as if leaving a friendly voice message.`;
+CRITICAL CONVERSATIONAL & LANGUAGE RULES:
+1. NATURAL URDU CONVERSATION (HIGHEST PRIORITY):
+   - When the caller speaks, writes, or greets in Urdu or Roman Urdu (e.g. 'Salam', 'Assalam-o-Alaikum', 'kya haal hai', 'kaise ho', 'Husnain kahan hai', 'mujhe kaam tha'):
+     - ALWAYS reply in natural, authentic, fluent Pakistani Urdu in Urdu script (e.g. 'وعلیکم السلام! جی میں حسنین کی طرف سے بات کر رہا ہوں۔ وہ اس وقت مصروف ہیں، فرمائیے میں آپ کی کیا مدد کر سکتا ہوں؟').
+     - Speak exactly like a polite, educated Pakistani person answering a phone call.
+     - NEVER use robotic phrases, literal machine translations, or stiff bookish language. Make it sound completely natural and human.
+     - Keep your answer short, clear, and conversational (2 to 3 sentences maximum).
+2. NATURAL ENGLISH CONVERSATION:
+   - When the caller speaks in English, respond in a natural, polite, and friendly male conversational tone.
+3. HANDLING WHERE ${userName} IS:
+   - If asked where ${userName} is or why they didn't answer the call, politely explain that they are currently occupied/busy, and you are taking their messages or assisting them right now.
+4. ABSOLUTELY NO MARKDOWN OR SPECIAL SYMBOLS:
+   - Crucial: NEVER use markdown symbols (no asterisks *, no bullet points -, no emojis in your spoken words, no numbered lists, no URLs) because your response is converted directly into spoken audio voice notes. Speak smoothly and naturally.`;
 }
 
 // ─── Status Persistence ──────────────────────────────────────────────────────
@@ -184,35 +196,40 @@ async function handleCallInterception(call) {
   }
   lastCallInterceptTime.set(callerJid, now);
 
-  const userName = botUser?.name || "the phone owner";
-  const greetingText = `Hello! You have reached ${userName}'s AI voice assistant. I am answering on their behalf because they are currently unavailable. Please hold down the microphone button right here in this chat and leave your voice note, and I will assist you or notify ${userName} immediately.`;
+  const userName = botUser?.name || "Husnain";
+  const liveCallUrl = getPublicTestUrl();
+
+  // Natural Urdu & English greeting spoken by Charlie (ElevenLabs)
+  const greetingAudioText = `السلام علیکم! آپ نے ${userName} کے اے آئی اسسٹنٹ سے رابطہ کیا ہے۔ وہ اس وقت دستیاب نہیں ہیں۔ آپ اپنا پیغام یہاں وائس میسج میں ریکارڈ کروا سکتے ہیں، میں آپ سے بات کر کے آپ کی مکمل رہنمائی کروں گا، یا فوری لائیو کال کے لیے لنک پر ٹیپ کریں۔ Hello! You have reached ${userName}'s AI voice assistant. He is currently unavailable. Please leave a voice note here to talk to me, or tap the link to join a live call.`;
 
   try {
-    console.log(`[TTS] Synthesizing call-interception voice note...`);
-    const oggBuffer = await synthesizeToWhatsAppOpus(greetingText, EDGE_TTS_VOICE);
+    console.log(`[TTS] Synthesizing call-interception voice note with Charlie voice (${ELEVENLABS_VOICE_ID})...`);
+    const oggBuffer = await synthesizeToWhatsAppOpus(greetingAudioText, ELEVENLABS_VOICE_ID);
 
-    // Send native WhatsApp Voice Note (PTT)
+    // Send native WhatsApp Voice Note (PTT) with Charlie's voice
     await sock.sendMessage(callerJid, {
       audio: oggBuffer,
       mimetype: "audio/ogg; codecs=opus",
       ptt: true
     });
 
-    // Also send text for visual confirmation
+    // Send companion text message with 1-tap live call link
+    const companionText = `📞 *${userName}'s AI Voice Assistant*\n\nالسلام علیکم! ${userName} اس وقت دستیاب نہیں ہیں۔\n\n🎙️ *آپ مجھ سے 2 طریقوں سے بات کر سکتے ہیں:*\n1️⃣ *وائس میسج:* یہیں چیٹ میں مائیک کا بٹن دبا کر اپنا وائس میسج بھیجیں — میں فوراً سن کر آپ کو جواب دوں گا۔\n2️⃣ *براہِ راست لائیو فون کال (Live Call):* نیچے دیے گئے لنک پر ٹیپ کریں اور براہِ راست لائیو فون کال کی طرح مجھ سے بات کریں:\n👉 ${liveCallUrl}\n\n_(Reply with a voice note here, or tap the link above to talk on a live voice call.)_`;
+
     await sock.sendMessage(callerJid, {
-      text: `Hi! I am ${userName}'s AI assistant. They are currently unavailable. Please leave a voice note here and I'll listen and assist you right away.`
+      text: companionText
     });
 
-    console.log(`[CALL] Voice note delivered to +${callerNumber}`);
+    console.log(`[CALL] Voice note and live call link delivered to +${callerNumber}`);
 
     logCallRecord({
       callerNumber: `+${callerNumber}`,
       type: "WhatsApp Call (Auto-Intercepted)",
       transcript: [
-        { role: "system", text: "Incoming WhatsApp call intercepted and silenced." },
-        { role: "assistant", text: greetingText }
+        { role: "system", text: "Incoming WhatsApp call intercepted." },
+        { role: "assistant", text: greetingAudioText }
       ],
-      summary: `Call from +${callerNumber} intercepted. AI greeting sent.`
+      summary: `Call from +${callerNumber} intercepted. Delivered Charlie Urdu/English voice note & live call studio link.`
     });
   } catch (err) {
     console.error(`[CALL ERROR] Failed to send voice note to +${callerNumber}:`, err.message);
@@ -300,19 +317,19 @@ async function _processMessage(msg, jid) {
       const transcription = await groq.audio.transcriptions.create({
         file: audioFile,
         model: GROQ_STT_MODEL,
-        language: "en"
+        prompt: "Urdu and English speech. السلام علیکم، میں حسنین سے بات کرنا چاہتا ہوں، کیا حال ہے، سب خیریت ہے۔"
       });
 
       userText = (transcription.text || "").trim();
       console.log(`[STT] Result: "${userText}"`);
 
       if (!userText) {
-        await safeSendText(jid, "I couldn't hear that voice note clearly. Could you please send it again?");
+        await safeSendText(jid, "معذرت، میں آپ کا وائس میسج واضح طور پر نہیں سن سکا۔ برائے مہربانی دوبارہ بھیجیں یا ٹیکسٹ میسج کریں۔");
         return;
       }
     } catch (sttErr) {
       console.error(`[STT ERROR]`, sttErr.message);
-      await safeSendText(jid, "I had trouble understanding your voice note. Please try again or type your message.");
+      await safeSendText(jid, "معذرت، وائس میسج پراسیس کرنے میں دشواری پیش آئی۔ برائے مہربانی دوبارہ بھیجیں یا لکھ کر میسج کریں۔");
       return;
     }
 
@@ -353,27 +370,27 @@ async function _processMessage(msg, jid) {
       model: GROQ_LLM_MODEL,
       messages,
       max_tokens: 300,
-      temperature: 0.5,
+      temperature: 0.6,
       ...(GROQ_LLM_MODEL.includes("gpt-oss") ? { reasoning_effort: "low" } : {})
     });
 
     aiReplyText = (completion.choices?.[0]?.message?.content || "").trim();
 
     if (!aiReplyText) {
-      aiReplyText = "I received your message. Let me get back to you shortly.";
+      aiReplyText = "وعلیکم السلام! میں نے آپ کا پیغام نوٹ کر لیا ہے، میں حسنین کو مطلع کر دوں گا۔";
     }
 
     console.log(`[LLM] Response: "${aiReplyText}"`);
     appendHistory(jid, "assistant", aiReplyText);
   } catch (llmErr) {
     console.error(`[LLM ERROR]`, llmErr.message);
-    aiReplyText = "I am having a brief connection delay. I have noted your message and will follow up shortly.";
+    aiReplyText = "معذرت، اس وقت رابطہ میں تاخیر ہو رہی ہے۔ میں نے آپ کا پیغام نوٹ کر لیا ہے۔";
   }
 
   // ── TTS Synthesis & Send Voice Note ───────────────────────────────────
   try {
-    console.log(`[TTS] Synthesizing reply with Edge-TTS (${EDGE_TTS_VOICE})...`);
-    const oggBuffer = await synthesizeToWhatsAppOpus(aiReplyText, EDGE_TTS_VOICE);
+    console.log(`[TTS] Synthesizing reply with ElevenLabs Charlie (${ELEVENLABS_VOICE_ID})...`);
+    const oggBuffer = await synthesizeToWhatsAppOpus(aiReplyText, ELEVENLABS_VOICE_ID);
 
     await sock.sendMessage(
       jid,

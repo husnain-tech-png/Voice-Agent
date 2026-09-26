@@ -25,7 +25,7 @@ try {
 }
 
 Write-Host "`n2. Testing POST /tts (Mouth)..." -ForegroundColor Yellow
-$defaultVoice = if ($voices.defaultVoiceId) { $voices.defaultVoiceId } else { "EXAVITQu4vr4xnSDxMaL" }
+$defaultVoice = if ($voices.defaultVoiceId) { $voices.defaultVoiceId } else { "IKne3meq5aSn9XLyUdCD" }
 $body = (@{ text = "Hello! This is a test of the speech mouth synthesis."; voiceId = $defaultVoice } | ConvertTo-Json)
 
 try {

@@ -1,5 +1,6 @@
 // test-whatsapp-agent.js
 // Automated verification for Personal WhatsApp Voice Agent Pipeline
+// Tests: ElevenLabs Charlie Voice, Multilingual Urdu STT, Urdu LLM Reasoning, Call History
 
 import fs from "fs";
 import path from "path";
@@ -16,18 +17,20 @@ const __dirname = path.dirname(__filename);
 async function runTests() {
   console.log("\n========================================================");
   console.log("🧪 Automated Verification: WhatsApp Voice Agent Pipeline");
+  console.log("   Voice: ElevenLabs Charlie (IKne3meq5aSn9XLyUdCD)");
+  console.log("   Language: Natural Pakistani Urdu & English");
   console.log("========================================================\n");
 
   let passed = 0;
   const total = 4;
 
-  // Test 1: Verify Zero-Cost Edge-TTS to Opus OGG
-  console.log("👉 Test 1: Testing Zero-Cost Edge-TTS to Opus OGG generation...");
+  // Test 1: Verify ElevenLabs Charlie TTS to Opus OGG (Urdu & English)
+  console.log("👉 Test 1: Testing ElevenLabs Charlie Voice Opus OGG synthesis (Urdu)...");
   try {
-    const testPhrase = "Hello! I am answering on behalf of Husnain. Please leave a voice note.";
-    const oggBuffer = await synthesizeToWhatsAppOpus(testPhrase, "en-US-AriaNeural");
+    const urduPhrase = "السلام علیکم! میں حسنین کا اسسٹنٹ بول رہا ہوں، فرمائیے میں آپ کی کیا مدد کر سکتا ہوں۔";
+    const oggBuffer = await synthesizeToWhatsAppOpus(urduPhrase);
     if (oggBuffer && oggBuffer.length > 5000) {
-      console.log(`   ✅ Edge-TTS generated valid WhatsApp Opus buffer (${(oggBuffer.length / 1024).toFixed(1)} KB)`);
+      console.log(`   ✅ Charlie synthesized valid WhatsApp Opus OGG (${(oggBuffer.length / 1024).toFixed(1)} KB)`);
       passed++;
     } else {
       throw new Error(`Buffer too small: ${oggBuffer?.length} bytes`);
@@ -36,29 +39,29 @@ async function runTests() {
     console.error("   ❌ Test 1 Failed:", err.message);
   }
 
-  // Test 2: Verify Groq Whisper STT with the generated audio
-  console.log("\n👉 Test 2: Testing Groq Whisper STT on synthesized WhatsApp audio...");
+  // Test 2: Verify Groq Whisper STT on synthesized Urdu audio
+  console.log("\n👉 Test 2: Testing Groq Whisper STT on synthesized Urdu WhatsApp audio...");
   try {
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    const oggBuffer = await synthesizeToWhatsAppOpus("This is a test of Groq Whisper turbo audio transcription.", "en-US-AriaNeural");
-    const audioFile = await toFile(oggBuffer, "sample.ogg", { type: "audio/ogg" });
+    const oggBuffer = await synthesizeToWhatsAppOpus("السلام علیکم، میں حسنین سے ملنا چاہتا ہوں۔");
+    const audioFile = await toFile(oggBuffer, "sample_urdu.ogg", { type: "audio/ogg" });
     const transcription = await groq.audio.transcriptions.create({
       file: audioFile,
-      model: "whisper-large-v3-turbo"
+      model: "whisper-large-v3-turbo",
+      prompt: "Urdu and English speech. السلام علیکم، میں حسنین سے ملنا چاہتا ہوں۔"
     });
-    console.log(`   ✅ Transcribed: "${transcription.text}"`);
-    if (transcription.text && transcription.text.toLowerCase().includes("whisper")) {
+    console.log(`   ✅ Transcribed Urdu Audio: "${transcription.text}"`);
+    if (transcription.text && transcription.text.length > 2) {
       passed++;
     } else {
-      console.log("   ✅ Text recognized successfully.");
-      passed++;
+      throw new Error("Empty transcription result");
     }
   } catch (err) {
     console.error("   ❌ Test 2 Failed:", err.message);
   }
 
-  // Test 3: Verify Groq Llama 3.3 70B Thinking Brain
-  console.log("\n👉 Test 3: Testing Groq Llama 3.3 70B conversational reasoning...");
+  // Test 3: Verify Groq LLM Conversational Urdu Reasoning
+  console.log("\n👉 Test 3: Testing Groq LLM natural Pakistani Urdu reasoning...");
   try {
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
     const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
@@ -67,18 +70,18 @@ async function runTests() {
       messages: [
         {
           role: "system",
-          content: "You are Husnain's voice assistant. Reply in 2 sentences max. No markdown."
+          content: "You are Charlie, Husnain's polite male voice assistant. Respond to Urdu queries in natural, authentic Pakistani Urdu in Urdu script (2 sentences max). No markdown."
         },
         {
           role: "user",
-          content: "Hi! Can I talk to Husnain? I need to ask him about the project timeline."
+          content: "السلام علیکم بھائی! کیا حسنین بھائی موجود ہیں؟ مجھے ان سے ایک پروجیکٹ کے بارے میں بات کرنی تھی۔"
         }
       ],
       max_tokens: 200,
       ...(model.includes("gpt-oss") ? { reasoning_effort: "low" } : {})
     });
     const reply = completion.choices[0]?.message?.content || "";
-    console.log(`   ✅ LLM Reply: "${reply.trim()}"`);
+    console.log(`   ✅ LLM Urdu Reply: "${reply.trim()}"`);
     if (reply.length > 10) {
       passed++;
     } else {

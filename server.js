@@ -30,7 +30,7 @@ function getEnv() {
   const groqKey = (process.env.GROQ_API_KEY || "").trim();
   const elevenlabsKey = (process.env.ELEVENLABS_API_KEY || "").trim();
   const groqModel = (process.env.GROQ_MODEL || "openai/gpt-oss-120b").trim();
-  const defaultVoice = (process.env.ELEVENLABS_VOICE_ID || "EXAVITQu4vr4xnSDxMaL").trim(); // Bella (Free Tier & Pro)
+  const defaultVoice = (process.env.ELEVENLABS_VOICE_ID || "IKne3meq5aSn9XLyUdCD").trim(); // Charlie (Casual Male Voice)
   const deepgramKey = (process.env.DEEPGRAM_API_KEY || "").trim();
   const openaiKey = (process.env.OPEN_AI_API_KEY || process.env.OPENAI_API_KEY || "").trim();
   const twilioAccountSid = (process.env.TWILIO_ACCOUNT_SID || "").trim();
@@ -285,13 +285,13 @@ async function processCallEnd(session) {
 
 // Preset ElevenLabs Voices (Tested & verified for Free & Pro accounts)
 const PRESET_VOICES = [
-  { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella", description: "Warm, natural female voice (Recommended)", provider: "ElevenLabs" },
+  { id: "IKne3meq5aSn9XLyUdCD", name: "Charlie", description: "Casual, friendly male voice (Recommended)", provider: "ElevenLabs" },
+  { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella", description: "Warm, natural female voice", provider: "ElevenLabs" },
   { id: "pNInz6obpgDQGcFmaJgB", name: "Adam", description: "Deep, professional male voice", provider: "ElevenLabs" },
   { id: "ErXwobaYiN019PkySvjV", name: "Antoni", description: "Pleasant, articulate male voice", provider: "ElevenLabs" },
   { id: "Xb7hH8MSUJpSbSDYk0k2", name: "Alice", description: "Clear, engaging British female voice", provider: "ElevenLabs" },
   { id: "VR6AewLTigWG4xSOukaG", name: "Arnold", description: "Crisp, resonant male voice", provider: "ElevenLabs" },
   { id: "JBFqnCBsd6RMkjVDRZzb", name: "George", description: "Warm British male voice", provider: "ElevenLabs" },
-  { id: "IKne3meq5aSn9XLyUdCD", name: "Charlie", description: "Casual Australian male voice", provider: "ElevenLabs" },
   { id: "onwK4e9ZLuTAKqWW03F9", name: "Daniel", description: "Authoritative British male voice", provider: "ElevenLabs" }
 ];
 
@@ -717,7 +717,7 @@ app.post("/chat", async (req, res) => {
         {
           role: "system",
           content:
-            "You are a knowledgeable, highly accurate AI voice assistant. Provide authentic, accurate information in the language requested by the user (such as Urdu or English). Keep answers natural, clear, and concise (2-3 sentences), so they can be spoken aloud smoothly."
+            "You are a friendly, highly articulate AI voice assistant speaking with a natural human male voice (Charlie). If the user speaks or writes in Urdu or Roman Urdu, reply in natural, everyday conversational Pakistani Urdu (e.g. 'السلام علیکم! جی فرمائیں، میں آپ کی کیا مدد کر سکتا ہوں؟'). Keep answers natural, clear, polite, and concise (2-3 sentences), so they can be spoken aloud smoothly."
         },
         {
           role: "user",
@@ -1309,7 +1309,7 @@ browserWss.on("connection", (ws, req) => {
   const session = {
     id: sessionId,
     voiceId: env.DEFAULT_ELEVENLABS_VOICE,
-    systemPrompt: "You are a knowledgeable, highly accurate AI voice assistant. Provide authentic, accurate information in the language requested by the user (such as Urdu or English). Keep answers natural, clear, and concise (2-3 sentences), so they can be spoken aloud in real-time.",
+    systemPrompt: "You are a friendly, highly articulate AI voice assistant speaking in a natural human male voice (Charlie). If the user speaks in Urdu or Roman Urdu, reply in natural, everyday conversational Pakistani Urdu (e.g. 'السلام علیکم! جی فرمائیں، میں آپ کی کیا مدد کر سکتا ہوں؟'). Keep answers natural, clear, polite, and concise (2-3 sentences), so they can be spoken aloud in real-time.",
     abortController: null,
     isProcessing: false,
     audioChunks: [],
@@ -1600,7 +1600,7 @@ async function handleTwilioCallerUtterance(ws, session, mulawBuffer) {
           {
             role: "system",
             content:
-              "You are a friendly, knowledgeable AI telephone assistant on a live phone call. Keep answers clear, natural, and concise (1 to 2 short sentences), so the caller can easily follow over the telephone."
+              "You are a polite, friendly AI telephone assistant speaking with a natural human male voice (Charlie). If the caller speaks in Urdu or Roman Urdu, respond in natural, everyday conversational Pakistani Urdu (e.g. 'السلام علیکم! جی فرمائیں، میں آپ کی کیا مدد کر سکتا ہوں؟'). Keep answers clear, polite, natural, and concise (1 to 2 short sentences), so the caller can easily follow over the telephone."
           },
           ...session.history
         ],

@@ -6,29 +6,29 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 ---
 
 ## 🚦 Current Status Summary
-- **Current Phase:** ✅ **Stage 6 & 6.1 Fully Functional — WhatsApp AI Voice Agent (Personal WhatsApp via Baileys QR Pairing on Port 3005 + Meta Cloud API Webhook on Port 8000; Real-Time Call Interception, Voice-to-Voice PTT Notes, Groq Whisper STT, Groq LLM, Zero-Cost Edge-TTS & FFmpeg Opus Transcoding)**
+- **Current Phase:** ✅ **Stage 6.2 Fully Functional — WhatsApp AI Voice Agent with ElevenLabs Charlie Male Voice, Natural Conversational Urdu Intelligence & Live Call Studio Link**
 - **Protocols & Gateways:** 
-  - 📲 **Personal WhatsApp AI Voice Agent (Stage 6.1 Active - Port 3005):** Node.js Baileys service in [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), direct QR pairing for any phone number, real-time WhatsApp call interception (`sock.rejectCall` + auto AI voice note), native PTT voice notes (`audio/ogg; codecs=opus`), Web QR dashboard on `http://localhost:3005/qr`, and status API (`GET /status`).
+  - 📲 **Personal WhatsApp AI Voice Agent (Stage 6.1 & 6.2 Active - Port 3005):** Node.js Baileys service in [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), direct QR pairing for any phone number, real-time WhatsApp call interception (`sock.rejectCall` + auto AI voice note in Charlie's ElevenLabs voice + 1-tap Live Call link), native PTT voice notes (`audio/ogg; codecs=opus`), Web QR dashboard on `http://localhost:3005/qr`, and status API (`GET /status`).
   - 🤖 **WhatsApp Cloud API Voice Agent (Stage 6 Active - Port 8000):** FastAPI server in [`whatsapp-bot/main.py`](file:///c:/voice%20agenty/whatsapp-bot/main.py), Meta Cloud API Webhook (`POST /webhook`, verification `GET /webhook`), Health Diagnostics (`GET /health`), Interactive Swagger Docs (`/docs`), Background Task Audio Pipeline, and Automated Test Suite ([`whatsapp-bot/test-whatsapp.ps1`](file:///c:/voice%20agenty/whatsapp-bot/test-whatsapp.ps1))
   - 🌐 **Telnyx CPaaS & TeXML (Active & Primary):** Full-duplex μ-law (8000Hz) WebSocket on `/telnyx/media-stream`, TeXML Webhook on `/telnyx/incoming`, TeXML App ID `3055170547735332106`, Status on `/api/telnyx/status`, Auto-Sync on `/api/telnyx/sync`
   - 📱 **Mobile Call Forwarding & History:** REST endpoints on `/api/forwarding/setup`, `/api/calls/history`, `/api/calls/:callSid`, `/api/calls/test-summary-sms`
   - 📞 **Twilio Media Streams Telephony (Secondary/Fallback):** Full-duplex μ-law (8000Hz) WebSocket on `/twilio/media-stream`, TwiML on `/twilio/incoming`
-  - ⚡ **Browser Live Studio:** Full-duplex WebSocket on `/ws/voice` (<500ms TTFA)
+  - ⚡ **Browser Live Studio:** Full-duplex WebSocket on `/ws/voice` (<500ms TTFA) with ElevenLabs Charlie voice
   - 📦 **REST HTTP:** Backward-compatible endpoints (`/voice-chat`, `/chat`, `/transcribe`, `/tts`)
 - **Ears (Listening):**
   - Web & Telephony: ✅ Groq Whisper Turbo (`whisper-large-v3-turbo`) with G.711 μ-law to 16-bit linear PCM WAV decoding
-  - WhatsApp Voice Notes: ✅ Groq Whisper (`whisper-large-v3`) with native `.ogg` audio decoding (~200ms)
+  - WhatsApp Voice Notes: ✅ Groq Whisper Multilingual (`whisper-large-v3-turbo`) with auto-detecting Urdu & English speech (~200ms)
 - **Brain (Thinking):**
   - Web & Telephony: ✅ Groq LLM (`openai/gpt-oss-120b`) with **live token streaming (`stream: true`)** + Post-Call Summary generation
-  - WhatsApp Voice Agent: ✅ Groq LLM (`llama-3.3-70b-versatile`) with 10-turn conversation memory & voice-optimized responses
+  - WhatsApp Voice Agent: ✅ Groq LLM with authentic, polite conversational Pakistani Urdu & English intelligence
 - **Mouth (Speaking):**
-  - Web & Telephony: ✅ **ElevenLabs Flash v2.5 (`eleven_flash_v2_5`)** with native **`output_format=ulaw_8000`** telephony output
-  - WhatsApp Voice Notes: ✅ **Microsoft Edge-TTS (`edge-tts` AriaNeural)** with zero-cost ($0.00) ultra-high-quality neural voice synthesis
+  - Web & Telephony: ✅ **ElevenLabs Flash v2.5 (`eleven_flash_v2_5`)** with Charlie male voice (`IKne3meq5aSn9XLyUdCD`)
+  - WhatsApp Voice Notes: ✅ **ElevenLabs Charlie (`IKne3meq5aSn9XLyUdCD`) via `eleven_multilingual_v2`** with zero-cost male fallback (`ur-PK-AsadNeural` for Urdu, `en-US-GuyNeural` for English)
 - **Voice Activity Detection (VAD):** ✅ Real-time RMS energy detector on 20ms audio chunks with ~700ms silence detection
 - **Phone Interruption Handling:** ✅ **Live Phone Barge-In**: Emits Twilio/Telnyx `clear` event in <50ms to wipe phone line buffer
 - **Call Summaries & Notifications:** ✅ Automatic Groq LLM post-call summary + Telnyx / Twilio SMS delivery to `PERSONAL_PHONE_NUMBER` (`+923154483615`)
 - **Call History Persistence:** ✅ In-memory cache + automatic disk backup to `call-history.json`
-- **Default Voice:** Bella (`EXAVITQu4vr4xnSDxMaL` for ElevenLabs) / Aria (`en-US-AriaNeural` for WhatsApp Edge-TTS)
+- **Default Voice:** Charlie (`IKne3meq5aSn9XLyUdCD` - Casual Friendly Male Voice)
 - **API Status:**
   - WhatsApp Voice Bot: ✅ Initialized & Verified (`whatsapp-bot/main.py` on port 8000, Meta Webhook `/webhook`, `/health`, `/docs`)
   - Telnyx CPaaS: ✅ Connected & Verified (Configured in `.env`, Balance `$5.00`, TeXML App `3055170547735332106`)
@@ -259,6 +259,21 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
   - Exponential reconnection backoff strategy (3s, 6s, 12s, 24s... up to 60s) to handle network interruptions cleanly.
   - Automatic recovery from corrupted auth directories.
   - Persistent interaction and call logging to `call-history.json`.
+
+### Stage 6.2: ElevenLabs Charlie Voice, Authentic Conversational Urdu & Live Call Studio Link
+- [x] **ElevenLabs Charlie Voice Integration (`IKne3meq5aSn9XLyUdCD`)**:
+  - Replaced female voices (`Bella` / `Aria`) with ElevenLabs **Charlie** male voice across all endpoints, Web Studio (`public/index.html`), and WhatsApp bot.
+  - Integrated `eleven_multilingual_v2` model in [`edge-tts-helper.js`](file:///c:/voice%20agenty/edge-tts-helper.js) for high-expressiveness, human-sounding speech synthesis in WhatsApp Opus voice notes.
+  - Configured zero-cost male fallback via Microsoft Edge-TTS: `ur-PK-AsadNeural` (authentic Pakistani male Urdu) and `en-US-GuyNeural` (American male English) — eliminating all female robot voices.
+- [x] **Flawless Pakistani Urdu Intelligence & STT Auto-Detection**:
+  - Removed hardcoded `language: "en"` from Groq Whisper Turbo STT in `whatsapp-personal.js`.
+  - Added Urdu phonetic prompt hint (`prompt: "Urdu and English speech. السلام علیکم، میں حسنین سے بات کرنا چاہتا ہوں..."`) enabling Whisper to accurately transcribe Urdu speech without mangling Urdu words into English.
+  - Tuned Groq LLM brain prompt with strict conversational Urdu rules: responds in polite, natural, authentic Pakistani Urdu in Urdu script (e.g., *"وعلیکم السلام! جی میں حسنین کی طرف سے بات کر رہا ہوں۔ وہ اس وقت مصروف ہیں، فرمائیے میں آپ کی کیا مدد کر سکتا ہوں؟"*), completely eliminating stiff machine translations or awkward Roman Urdu.
+- [x] **WhatsApp Call Interception & 1-Tap Live Call Link**:
+  - When someone voice calls the WhatsApp number, the agent silences/rejects the call and immediately delivers a personalized voice note in Charlie's voice in Urdu and English.
+  - Automatically dispatches a companion message with a **1-tap Live Voice Call Studio link** (`PUBLIC_URL`), allowing the caller to immediately speak directly with the AI brain in real time on a full-duplex voice call.
+- [x] **Automated 4/4 Verification Test Suite**:
+  - [`test-whatsapp-agent.js`](file:///c:/voice%20agenty/test-whatsapp-agent.js) verifies Charlie Opus OGG synthesis, Whisper Urdu transcription, Groq Urdu LLM reasoning, and call history logging (100% pass rate).
 
 ---
 

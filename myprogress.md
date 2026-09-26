@@ -8,7 +8,7 @@ A voice agent needs three main superpowers:
 2. **Brain (LLM - Large Language Model):** Reads the words, understands what you mean, and thinks of a smart response.
 3. **Mouth (Text-to-Speech):** Speaks the answer aloud so you can hear it.
 
-🎉 **Stage 5, Stage 6 & Stage 6.1 are now live:** We have officially built **Mobile Setup & Carrier Call Forwarding with SMS Summaries** (Stage 5), **WhatsApp Cloud API Voice Agent** (Stage 6), AND the **Direct Personal WhatsApp AI Agent with Call Interception** (Stage 6.1)! Anyone can scan the QR code to pair their personal WhatsApp number, intercept unanswered calls with an AI voice note, and converse via native voice notes for **$0.00 carrier fees**!
+🎉 **Stage 5, Stage 6, Stage 6.1 & Stage 6.2 are now live:** We have officially built **Mobile Setup & Carrier Call Forwarding with SMS Summaries** (Stage 5), **WhatsApp Cloud API Voice Agent** (Stage 6), the **Direct Personal WhatsApp AI Agent with Call Interception** (Stage 6.1), and **Charlie's Voice with Natural Pakistani Urdu Conversation & 1-Tap Live Call Link** (Stage 6.2)! Anyone can scan the QR code to pair their personal WhatsApp number, intercept unanswered calls with an AI voice note in Charlie's natural male voice, converse via authentic Urdu voice notes, or tap the link to talk live with the AI brain!
 
 ---
 
@@ -1153,7 +1153,33 @@ You will see:
 
 ---
 
-## 📚 Key Concepts Dictionary (Updated for Stage 6.1)
+## 🛠️ What We Did in Stage 6.2: Charlie's Voice, Authentic Urdu & Live Call Link (Step-by-Step in Easy Words)
+
+### 1. Why Did the Urdu Voice Message Sound "Weird" Before?
+* **Problem 1 (The Deaf Ear):** When you sent an Urdu voice note, Whisper STT was forced with `language: "en"`. Whisper tried to turn Urdu words into random English words (like hearing *"Assalam-o-Alaikum"* and typing *"a slam like him"*).
+* **Problem 2 (The American Voice):** We used an American female robotic voice (`en-US-AriaNeural`). When an American robot tries to pronounce Roman Urdu, it sounds totally bizarre and incomprehensible!
+* **Problem 3 (Awkward Machine Translations):** Stiff literal translations sounded like a machine instead of a real Pakistani person.
+
+### 2. How Did We Fix It?
+1. **Ears (Groq Whisper Turbo STT):** We removed the hardcoded `language: "en"` and added an Urdu phonetic prompt hint. Now Whisper automatically recognizes Urdu, Roman Urdu, and English with near-perfect accuracy!
+2. **Brain (LLM Prompt Tuning):** We instructed the LLM brain to speak polite, authentic, everyday Pakistani Urdu in Urdu script (*"وعلیکم السلام! جی میں حسنین کی طرف سے بات کر رہا ہوں۔ وہ اس وقت مصروف ہیں، فرمائیے میں آپ کی کیا مدد کر سکتا ہوں؟"*). It speaks like a real, polite person on the phone!
+3. **Mouth (ElevenLabs Charlie Voice `IKne3meq5aSn9XLyUdCD`):**
+   - We switched the voice from a girl's voice (Bella/Aria) to **Charlie** — a warm, friendly, natural human male voice.
+   - We used ElevenLabs' **`eleven_multilingual_v2`** model, which can speak both Urdu and English with real human emotion, cadence, and proper accents!
+   - As a zero-cost backup, we added Microsoft's Pakistani male Urdu voice (`ur-PK-AsadNeural`) and American male English voice (`en-US-GuyNeural`), completely banishing all female robotic voices.
+
+### 3. What Happens Now When Someone Calls You on WhatsApp?
+* WhatsApp's Web protocol doesn't allow third-party bots to answer WebRTC voice calls directly inside the WhatsApp app.
+* **Our Smart Solution:**
+  1. The bot silences the call so it doesn't ring endlessly.
+  2. Charlie immediately sends an authentic, bilingual voice note in Urdu & English explaining Husnain is unavailable.
+  3. The bot sends a companion message with a **1-tap Live Voice Call Studio link**:
+     - **Option 1:** Send a voice note right in the chat — the AI listens and talks back immediately!
+     - **Option 2:** Tap the link to enter the Live Studio and talk live with the AI brain on a real-time full-duplex phone call!
+
+---
+
+## 📚 Key Concepts Dictionary (Updated for Stage 6.2)
 
 | Term | What It Means in Simple Words |
 | :--- | :--- |

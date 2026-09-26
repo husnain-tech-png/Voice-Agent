@@ -1,5 +1,47 @@
 [
   {
+    "callSid": "WA_1790399633222_d2t6",
+    "callerNumber": "+39814900486311",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Chat Exchange",
+    "startTime": "2026-09-26T05:13:53.222Z",
+    "endTime": "2026-09-26T05:13:53.222Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "user",
+        "text": "."
+      },
+      {
+        "role": "assistant",
+        "text": "وعلیکم السلام! میں حسنین کی طرف سے بات کر رہا ہوں۔ آپ کی کوئی مدد چاہیے تو بتائیں۔"
+      }
+    ],
+    "summary": "User: \".\". AI: \"وعلیکم السلام! میں حسنین کی طرف سے بات کر رہا ہوں۔ آپ کی کوئی مدد چاہیے تو بتائیں۔\".",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790399515750_0n29",
+    "callerNumber": "+39814900486311",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Call (Auto-Intercepted)",
+    "startTime": "2026-09-26T05:11:55.750Z",
+    "endTime": "2026-09-26T05:11:55.750Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call intercepted."
+      },
+      {
+        "role": "assistant",
+        "text": "السلام علیکم! آپ نے husnain bhatti کے اے آئی اسسٹنٹ سے رابطہ کیا ہے۔ وہ اس وقت دستیاب نہیں ہیں۔ آپ اپنا پیغام یہاں وائس میسج میں ریکارڈ کروا سکتے ہیں، میں آپ سے بات کر کے آپ کی مکمل رہنمائی کروں گا، یا فوری لائیو کال کے لیے لنک پر ٹیپ کریں۔ Hello! You have reached husnain bhatti's AI voice assistant. He is currently unavailable. Please leave a voice note here to talk to me, or tap the link to join a live call."
+      }
+    ],
+    "summary": "Call from +39814900486311 intercepted. Delivered Charlie Urdu/English voice note & live call studio link.",
+    "smsSent": false
+  },
+  {
     "callSid": "WA_1790323421574_h85w",
     "callerNumber": "+79693285961975",
     "channel": "WhatsApp",
