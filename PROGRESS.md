@@ -6,7 +6,7 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 ---
 
 ## 🚦 Current Status Summary
-- **Current Phase:** ✅ **Stage 6.2 Fully Functional — WhatsApp AI Voice Agent with ElevenLabs Charlie Male Voice, Natural Conversational Urdu Intelligence & Live Call Studio Link**
+- **Current Phase:** ✅ **Stage 6.3 Fully Functional — English Default with Dynamic Urdu Auto-Detection, Unified Telephony & WhatsApp Prompts, and 4/4 Language Verification**
 - **Protocols & Gateways:** 
   - 📲 **Personal WhatsApp AI Voice Agent (Stage 6.1 & 6.2 Active - Port 3005):** Node.js Baileys service in [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), direct QR pairing for any phone number, real-time WhatsApp call interception (`sock.rejectCall` + auto AI voice note in Charlie's ElevenLabs voice + 1-tap Live Call link), native PTT voice notes (`audio/ogg; codecs=opus`), Web QR dashboard on `http://localhost:3005/qr`, and status API (`GET /status`).
   - 🤖 **WhatsApp Cloud API Voice Agent (Stage 6 Active - Port 8000):** FastAPI server in [`whatsapp-bot/main.py`](file:///c:/voice%20agenty/whatsapp-bot/main.py), Meta Cloud API Webhook (`POST /webhook`, verification `GET /webhook`), Health Diagnostics (`GET /health`), Interactive Swagger Docs (`/docs`), Background Task Audio Pipeline, and Automated Test Suite ([`whatsapp-bot/test-whatsapp.ps1`](file:///c:/voice%20agenty/whatsapp-bot/test-whatsapp.ps1))
@@ -274,6 +274,25 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
   - Automatically dispatches a companion message with a **1-tap Live Voice Call Studio link** (`PUBLIC_URL`), allowing the caller to immediately speak directly with the AI brain in real time on a full-duplex voice call.
 - [x] **Automated 4/4 Verification Test Suite**:
   - [`test-whatsapp-agent.js`](file:///c:/voice%20agenty/test-whatsapp-agent.js) verifies Charlie Opus OGG synthesis, Whisper Urdu transcription, Groq Urdu LLM reasoning, and call history logging (100% pass rate).
+
+### Stage 6.3: English Default with Dynamic Urdu Auto-Detection & Unified Prompts
+- [x] **Default English Voice Persona with Instant Dynamic Urdu Switching**:
+  - Configured Charlie's default communication language to English across all channels (Web Studio, Twilio Telephony, Telnyx CPaaS, and WhatsApp).
+  - Implemented dynamic Urdu detection: automatically detects when callers speak or text in Urdu (Arabic script) or Roman Urdu (e.g. *salam, kya haal hai, kaise ho*), switching instantly to natural conversational Pakistani Urdu in Urdu script.
+- [x] **Smart Urdu Input Detector (`isUrduInput`) in `whatsapp-personal.js`**:
+  - Implemented dual-layer detection: Unicode range regex (`/[\u0600-\u06FF]/`) for Urdu script and conversational keyword regex (`/\b(salam|assalam|walekum|walaikum|kya|kyun|kese|kaise|haal|khairiyat|theek|thik|shukriya|meherbani|bhai|janab|aap|tum|kahan|kidhar|hun|hain|ho)\b/i`) for Roman Urdu.
+  - Added language-aware error handling and fallback replies (English errors for English speakers, polite Urdu errors for Urdu speakers).
+- [x] **Multilingual Whisper STT Context Prompt Seeding**:
+  - Updated Groq Whisper transcription prompts across `server.js` and `whatsapp-personal.js` with bilingual context: `"English and Urdu conversational speech. Hello, how are you? السلام علیکم، کیا حال ہے، آپ کیسے ہیں؟"` to maximize recognition accuracy for both languages and prevent code-switching errors.
+- [x] **English-First Call Interception Greeting with Urdu Guidance**:
+  - Updated `handleCallInterception` audio synthesis to deliver an English-first greeting with natural Urdu guidance: *"Hello! You have reached Husnain's AI voice assistant... السلام علیکم! اگر آپ اردو میں بات کرنا چاہیں تو بے جھجھک اردو میں بول سکتے ہیں..."*
+  - Updated companion text message to clearly guide users on both English voice notes and Urdu voice messages.
+- [x] **Web Studio UI Updates (`public/index.html`)**:
+  - Added `🌐 English (Auto-Detect Urdu)` badge to header.
+  - Updated page subtitle, welcome card instructions, and input placeholder to reflect bilingual auto-detection.
+- [x] **Automated Language Verification Test Suite (`test-language-detection.js`)**:
+  - Built standalone automated test script verifying 4/4 test cases: English default greeting, Urdu script response, Roman Urdu transliteration detection, and persistent English follow-up.
+
 
 ---
 

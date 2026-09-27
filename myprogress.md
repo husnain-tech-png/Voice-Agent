@@ -8,7 +8,7 @@ A voice agent needs three main superpowers:
 2. **Brain (LLM - Large Language Model):** Reads the words, understands what you mean, and thinks of a smart response.
 3. **Mouth (Text-to-Speech):** Speaks the answer aloud so you can hear it.
 
-🎉 **Stage 5, Stage 6, Stage 6.1 & Stage 6.2 are now live:** We have officially built **Mobile Setup & Carrier Call Forwarding with SMS Summaries** (Stage 5), **WhatsApp Cloud API Voice Agent** (Stage 6), the **Direct Personal WhatsApp AI Agent with Call Interception** (Stage 6.1), and **Charlie's Voice with Natural Pakistani Urdu Conversation & 1-Tap Live Call Link** (Stage 6.2)! Anyone can scan the QR code to pair their personal WhatsApp number, intercept unanswered calls with an AI voice note in Charlie's natural male voice, converse via authentic Urdu voice notes, or tap the link to talk live with the AI brain!
+🎉 **Stage 5, Stage 6, Stage 6.1, Stage 6.2 & Stage 6.3 are now live:** We have officially built **Mobile Setup & Carrier Call Forwarding with SMS Summaries** (Stage 5), **WhatsApp Cloud API Voice Agent** (Stage 6), the **Direct Personal WhatsApp AI Agent with Call Interception** (Stage 6.1), **Charlie's Voice with Natural Pakistani Urdu Conversation & 1-Tap Live Call Link** (Stage 6.2), and **English Default with Dynamic Urdu Language Auto-Detection & 4/4 Verification** (Stage 6.3)! Anyone can scan the QR code to pair their personal WhatsApp number, intercept unanswered calls with an AI voice note in Charlie's natural male voice, converse via authentic Urdu voice notes, or tap the link to talk live with the AI brain!
 
 ---
 
@@ -1179,7 +1179,68 @@ You will see:
 
 ---
 
-## 📚 Key Concepts Dictionary (Updated for Stage 6.2)
+## 🛠️ What We Did in Stage 6.3: English Default with Dynamic Urdu Auto-Detection (Step-by-Step in Easy Words)
+
+### 1. The Problem We Discovered (The "Language Trap")
+* **In Stage 6.2:** We made Charlie speak authentic Pakistani Urdu. But we hit an unexpected issue:
+  - The call greeting was mostly Urdu, which could confuse an English-speaking caller, international client, or colleague.
+  - If a user asked a question in English, the AI might sometimes get stuck or reply with Urdu phrases.
+* **The Goal for Stage 6.3:**
+  - **Professional English by Default:** Charlie speaks and greets in clean, natural, friendly English first.
+  - **Instant, Dynamic Auto-Detection:** The millisecond a caller speaks or writes in Urdu (whether in Arabic script or Roman Urdu like *"Salam bhai, kya haal hai"*), Charlie automatically switches and replies in authentic, polite Pakistani Urdu in Urdu script!
+  - **No Sticky Language:** When the caller switches back to English, Charlie effortlessly switches back to English.
+
+---
+
+### 2. How We Solved It Step-by-Step
+
+#### Step A: Intelligent Urdu Detection Function (`isUrduInput`)
+In [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), we created a smart two-layer detector:
+1. **Layer 1: Unicode Script Range (`/[\u0600-\u06FF]/`)**
+   - Computers store every letter as a unique number (Unicode). All Arabic and Urdu characters (like ا، ب، پ، ت، ٹ) live in the hexadecimal number block `0600` to `06FF`.
+   - If incoming text contains even a single character in this range, the function instantly knows it is written in Urdu script!
+2. **Layer 2: Roman Urdu Lexicon Matching (`\b...\b`)**
+   - Millions of people in Pakistan text using Roman English letters (*"Salam bhai, aap kahan ho?"*).
+   - We used a Regular Expression with **word boundaries (`\b`)** to match common conversational keywords:
+     `/\b(salam|assalam|walekum|walaikum|kya|kyun|kese|kaise|haal|khairiyat|theek|thik|shukriya|meherbani|bhai|janab|aap|tum|kahan|kidhar|hun|hain|ho)\b/i`
+   - Using `\b` ensures we only match whole words — so "ho" won't mistakenly trigger on English words like "hospital", "who", or "ghost"!
+
+#### Step B: Whisper Acoustic Prompt Seeding (Bilingual Ears)
+* Whisper STT (Groq Whisper Turbo) needs a "hint" so it knows what languages to expect on short audio files.
+* We updated the transcription prompt across both `server.js` and `whatsapp-personal.js`:
+  ```javascript
+  prompt: "English and Urdu conversational speech. Hello, how are you? السلام علیکم، کیا حال ہے، آپ کیسے ہیں؟"
+  ```
+* This acoustic priming teaches Whisper to accurately recognize both English and Urdu accents without corrupting Urdu words into random English phonetics.
+
+#### Step C: Unified Prompting Across All Channels
+* We synchronized the exact conversational rules across all 4 entry points:
+  1. Personal WhatsApp Agent (`whatsapp-personal.js`)
+  2. Web Studio Browser WebSocket (`/ws/voice` in `server.js`)
+  3. REST Chat & Voice Endpoints (`/chat`, `/voice-chat` in `server.js`)
+  4. Phone Line Telephony (`/twilio/media-stream` in `server.js`)
+* Every interface now enforces:
+  - English is the default tongue.
+  - Automatically detect language and reply in matching language.
+  - Strictly no markdown or asterisks (clean text for spoken voice).
+  - Concise conversational brevity (2-3 sentences max).
+
+#### Step D: English-First Call Interception Greeting
+* When an unanswered WhatsApp call is intercepted, Charlie speaks an English-first greeting with friendly Urdu instructions:
+  > *"Hello! You have reached Husnain's AI voice assistant. He is currently unavailable. Please leave a voice note here to talk to me, or tap the link to join a live call. السلام علیکم! اگر آپ اردو میں بات کرنا چاہیں تو بے جھجھک اردو میں بول سکتے ہیں، میں آپ کی مکمل رہنمائی کروں گا۔"*
+* The caller gets the best of both worlds: English speakers understand immediately, and Urdu speakers are welcomed to speak in Urdu.
+
+#### Step E: Automated Verification Suite (`test-language-detection.js`)
+* We built a dedicated automated test suite that runs 4 real API tests against Groq LLM:
+  - **Test 1 (English Query):** *"Hi Charlie, is Husnain available right now?"* -> Verified English response.
+  - **Test 2 (Urdu Script):** *"السلام علیکم بھائی، کیا حال ہے؟ حسنین کہاں ہیں؟"* -> Verified Urdu response.
+  - **Test 3 (Roman Urdu):** *"Salam bhai, Husnain se urgent kaam hai, call utha saktay hain?"* -> Verified Urdu response.
+  - **Test 4 (English Follow-up):** *"Can you let him know that our 3 PM meeting is confirmed?"* -> Verified English response (proves no language sticking).
+* **Result:** 4/4 Tests Passed with 100% accuracy!
+
+---
+
+## 📚 Key Concepts Dictionary (Updated for Stage 6.3)
 
 | Term | What It Means in Simple Words |
 | :--- | :--- |
@@ -1187,10 +1248,19 @@ You will see:
 | **Call Interception / Deflection** | Programmatically silencing an incoming ring and immediately dispatching an alternative communication channel (like an AI voice note). |
 | **PTT (Push-to-Talk)** | Native WhatsApp voice messages (green microphone bubbles with waveforms) rather than standard audio attachments. |
 | **Opus in OGG** | The high-efficiency audio codec standard required by WhatsApp for native voice note playback (48,000Hz, mono). |
+| **Dynamic Language Detection (LID)** | Automatically identifying the language of a text or speech utterance in real time and switching the system's behavior without requiring manual configuration. |
+| **Unicode Code Points (`\u0600-\u06FF`)** | The universal digital standard where every character in every human writing system has a unique number. The range `0600` to `06FF` specifically covers Arabic, Urdu, and Persian letters. |
+| **Word Boundary (`\b`) in Regex** | A special regex anchor that matches the boundary between a word character and a non-word character (like spaces or punctuation). It prevents partial matches (e.g. matching "ho" without matching "shout" or "hospital"). |
+| **Transliteration vs. Translation** | *Translation* converts the meaning into another language ("Hello" -> "السلام علیکم"). *Transliteration* writes the sounds of one language using the alphabet of another ("Assalam-o-Alaikum" or "kya haal hai"). |
+| **Code-Switching** | The linguistic phenomenon where a speaker alternates between two or more languages in a single conversation or sentence (e.g., mixing English and Urdu: *"Meeting confirm ho gayi hai"*). |
+| **Prompt Seeding / Acoustic Priming** | Supplying initial sample phrases in specific languages to a Speech-to-Text model (like Whisper) before audio starts, guiding its neural attention to recognize specific accents and vocabularies. |
+| **Regression Testing** | Re-running automated tests after making code changes to ensure that new features haven't broken or degraded existing functionality. |
+| **Graceful Degradation** | A design principle where a system responds intelligently with context-appropriate fallbacks (e.g., language-specific error messages) instead of crashing when a service experiences delay. |
 | **Mojibake** | Garbled, corrupted text that appears when text encoded in one character set (like UTF-8) is decoded using another (like Windows-1252). |
 | **Base64 Data URL** | An image encoded directly into text characters (`data:image/png;base64,...`) so it can be embedded in HTML without needing a separate file. |
 | **Debouncing** | A programming pattern that prevents a function from being executed multiple times simultaneously during rapid-fire events. |
 | **Exponential Backoff** | Gradually increasing the waiting time between reconnection attempts after a network failure to avoid overloading the server. |
+
 
 ---
 
