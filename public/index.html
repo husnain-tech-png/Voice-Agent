@@ -785,6 +785,7 @@
       <h1>🎙️ AI Voice Agent</h1>
       <div class="badge-group">
         <span id="wsBadge" class="badge badge-yellow">WS Connecting...</span>
+        <span id="langBadge" class="badge badge-blue">🌐 English (Auto-Detect Urdu)</span>
         <span id="aiBadge" class="badge badge-green">Groq LLM Stream</span>
         <span id="sttBadge" class="badge badge-blue">Whisper Turbo</span>
         <span id="ttsBadge" class="badge badge-purple">Mouth: Initializing</span>
@@ -792,7 +793,7 @@
         <span id="waBadge" class="badge badge-green" style="cursor:pointer;" onclick="window.open('http://localhost:3005/qr', '_blank')">💬 WhatsApp: Checking...</span>
       </div>
     </div>
-    <p class="subtitle">Stage 6 — Personal WhatsApp Voice Agent, Call Interception &amp; Live Streaming</p>
+    <p class="subtitle">Personal AI Voice Agent — English Default with Instant Urdu Language Auto-Detection</p>
 
     <!-- Mode Selector: Stage 3 (WS) vs Stage 2 (HTTP) vs Stage 4 (Phone) vs Stage 5 (Mobile Setup) vs Stage 6 (WhatsApp) -->
     <div class="mode-selector">
@@ -870,11 +871,11 @@
     <!-- Chat Message Feed -->
     <div class="chat-box" id="chatBox">
       <div class="msg bot-msg">
-        👋 Welcome to <strong>Stage 3: Real-Time Streaming</strong>!
+        👋 Welcome to <strong>AI Voice Agent Live Studio</strong>!
         <br><br>
-        • <strong>Full-Duplex WebSockets:</strong> Live bidirectional audio streaming on <code>/ws/voice</code>.<br>
-        • <strong>Sentence Pipelining:</strong> Groq LLM streams tokens, immediately dispatching each sentence to ElevenLabs Flash TTS.<br>
-        • <strong>Ultra-Low Latency:</strong> First audio starts playing in <strong>&lt;500 milliseconds</strong>!<br>
+        • <strong>Default Language:</strong> English (Speaks in natural male Charlie voice).<br>
+        • <strong>Automatic Urdu Detection:</strong> If you speak or write in Urdu (یا اردو میں بات کریں), the AI dynamically switches and replies in authentic conversational Pakistani Urdu!<br>
+        • <strong>Full-Duplex WebSockets:</strong> Live bidirectional audio streaming on <code>/ws/voice</code> (&lt;500ms latency).<br>
         • <strong>Live Barge-In:</strong> Speak or click <em>Interrupt</em> to cut the agent off instantly at any time!
       </div>
     </div>
@@ -884,7 +885,7 @@
       <button type="button" class="btn btn-mic" id="micBtn" title="Click to speak (Microphone)">
         <span id="micIcon">🎙️</span>
       </button>
-      <input type="text" id="userInput" placeholder="Speak with mic or type for instant stream..." autocomplete="off" required />
+      <input type="text" id="userInput" placeholder="Speak in English or Urdu (مجھ سے بات کریں)..." autocomplete="off" required />
       <button type="submit" class="btn btn-send" id="sendBtn">Send</button>
     </form>
 

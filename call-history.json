@@ -1,5 +1,47 @@
 [
   {
+    "callSid": "WA_1790492948652_qk0s",
+    "callerNumber": "+39814900486311",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Chat Exchange",
+    "startTime": "2026-09-27T07:09:08.652Z",
+    "endTime": "2026-09-27T07:09:08.652Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "user",
+        "text": "Hello"
+      },
+      {
+        "role": "assistant",
+        "text": "Hello! This is Charlie speaking on behalf of Husnain. How can I help you today?"
+      }
+    ],
+    "summary": "User: \"Hello\". AI: \"Hello! This is Charlie speaking on behalf of Husnain. How can I help you today?\".",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790492889347_ih9d",
+    "callerNumber": "+39814900486311",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Call (Auto-Intercepted)",
+    "startTime": "2026-09-27T07:08:09.347Z",
+    "endTime": "2026-09-27T07:08:09.347Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call intercepted."
+      },
+      {
+        "role": "assistant",
+        "text": "Hello! You have reached husnain bhatti's AI voice assistant. He is currently unavailable. Please leave a voice note here to talk to me, or tap the link to join a live call. السلام علیکم! اگر آپ اردو میں بات کرنا چاہیں تو بے جھجھک اردو میں بول سکتے ہیں، میں آپ کی مکمل رہنمائی کروں گا۔"
+      }
+    ],
+    "summary": "Call from +39814900486311 intercepted. Delivered Charlie Urdu/English voice note & live call studio link.",
+    "smsSent": false
+  },
+  {
     "callSid": "WA_1790399633222_d2t6",
     "callerNumber": "+39814900486311",
     "channel": "WhatsApp",

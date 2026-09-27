@@ -82,18 +82,32 @@ function getSystemPrompt() {
   return `You are Charlie, a polite, warm, articulate, and intelligent male AI voice assistant answering WhatsApp messages and calls on behalf of ${userName} (+${userNumber}).
 
 CRITICAL CONVERSATIONAL & LANGUAGE RULES:
-1. NATURAL URDU CONVERSATION (HIGHEST PRIORITY):
-   - When the caller speaks, writes, or greets in Urdu or Roman Urdu (e.g. 'Salam', 'Assalam-o-Alaikum', 'kya haal hai', 'kaise ho', 'Husnain kahan hai', 'mujhe kaam tha'):
-     - ALWAYS reply in natural, authentic, fluent Pakistani Urdu in Urdu script (e.g. 'وعلیکم السلام! جی میں حسنین کی طرف سے بات کر رہا ہوں۔ وہ اس وقت مصروف ہیں، فرمائیے میں آپ کی کیا مدد کر سکتا ہوں؟').
+1. DEFAULT LANGUAGE IS ENGLISH:
+   - Your primary and default language of communication is ENGLISH.
+   - When the user/caller speaks, writes, or greets in English, ALWAYS respond in a natural, polite, friendly, and articulate English conversational tone.
+2. DYNAMIC LANGUAGE DETECTION (URDU DETECTION):
+   - Listen to and detect the user's language automatically:
+   - When the caller speaks, writes, or greets in Urdu or Roman Urdu (e.g. 'السلام علیکم', 'کیا حال ہے', 'Salam', 'Assalam-o-Alaikum', 'kya haal hai', 'kaise ho', 'Husnain kahan hai', 'mujhe kaam tha'):
+     - Immediately and dynamically switch to speaking in authentic, natural, fluent Pakistani Urdu in proper Urdu script (e.g. 'وعلیکم السلام! جی میں حسنین کی طرف سے بات کر رہا ہوں۔ وہ اس وقت مصروف ہیں، فرمائیے میں آپ کی کیا مدد کر سکتا ہوں؟').
      - Speak exactly like a polite, educated Pakistani person answering a phone call.
      - NEVER use robotic phrases, literal machine translations, or stiff bookish language. Make it sound completely natural and human.
-     - Keep your answer short, clear, and conversational (2 to 3 sentences maximum).
-2. NATURAL ENGLISH CONVERSATION:
-   - When the caller speaks in English, respond in a natural, polite, and friendly male conversational tone.
-3. HANDLING WHERE ${userName} IS:
+   - When the caller speaks in English, ALWAYS respond in English.
+3. CONVERSATIONAL BREVITY:
+   - Keep your answer short, clear, and conversational (2 to 3 sentences maximum).
+4. HANDLING WHERE ${userName} IS:
    - If asked where ${userName} is or why they didn't answer the call, politely explain that they are currently occupied/busy, and you are taking their messages or assisting them right now.
-4. ABSOLUTELY NO MARKDOWN OR SPECIAL SYMBOLS:
+5. ABSOLUTELY NO MARKDOWN OR SPECIAL SYMBOLS:
    - Crucial: NEVER use markdown symbols (no asterisks *, no bullet points -, no emojis in your spoken words, no numbered lists, no URLs) because your response is converted directly into spoken audio voice notes. Speak smoothly and naturally.`;
+}
+
+/**
+ * Checks if input text contains Urdu script or common Roman Urdu conversational keywords
+ */
+function isUrduInput(text) {
+  if (!text) return false;
+  if (/[\u0600-\u06FF]/.test(text)) return true;
+  const romanUrduPatterns = /\b(salam|assalam|walekum|walaikum|kya|kyun|kese|kaise|haal|khairiyat|theek|thik|shukriya|meherbani|bhai|janab|aap|tum|kahan|kidhar|hun|hain|ho)\b/i;
+  return romanUrduPatterns.test(text);
 }
 
 // ─── Status Persistence ──────────────────────────────────────────────────────
@@ -199,8 +213,8 @@ async function handleCallInterception(call) {
   const userName = botUser?.name || "Husnain";
   const liveCallUrl = getPublicTestUrl();
 
-  // Natural Urdu & English greeting spoken by Charlie (ElevenLabs)
-  const greetingAudioText = `السلام علیکم! آپ نے ${userName} کے اے آئی اسسٹنٹ سے رابطہ کیا ہے۔ وہ اس وقت دستیاب نہیں ہیں۔ آپ اپنا پیغام یہاں وائس میسج میں ریکارڈ کروا سکتے ہیں، میں آپ سے بات کر کے آپ کی مکمل رہنمائی کروں گا، یا فوری لائیو کال کے لیے لنک پر ٹیپ کریں۔ Hello! You have reached ${userName}'s AI voice assistant. He is currently unavailable. Please leave a voice note here to talk to me, or tap the link to join a live call.`;
+  // Natural English-first greeting with Urdu auto-detect support spoken by Charlie (ElevenLabs)
+  const greetingAudioText = `Hello! You have reached ${userName}'s AI voice assistant. He is currently unavailable. Please leave a voice note here to talk to me, or tap the link to join a live call. السلام علیکم! اگر آپ اردو میں بات کرنا چاہیں تو بے جھجھک اردو میں بول سکتے ہیں، میں آپ کی مکمل رہنمائی کروں گا۔`;
 
   try {
     console.log(`[TTS] Synthesizing call-interception voice note with Charlie voice (${ELEVENLABS_VOICE_ID})...`);
@@ -214,7 +228,7 @@ async function handleCallInterception(call) {
     });
 
     // Send companion text message with 1-tap live call link
-    const companionText = `📞 *${userName}'s AI Voice Assistant*\n\nالسلام علیکم! ${userName} اس وقت دستیاب نہیں ہیں۔\n\n🎙️ *آپ مجھ سے 2 طریقوں سے بات کر سکتے ہیں:*\n1️⃣ *وائس میسج:* یہیں چیٹ میں مائیک کا بٹن دبا کر اپنا وائس میسج بھیجیں — میں فوراً سن کر آپ کو جواب دوں گا۔\n2️⃣ *براہِ راست لائیو فون کال (Live Call):* نیچے دیے گئے لنک پر ٹیپ کریں اور براہِ راست لائیو فون کال کی طرح مجھ سے بات کریں:\n👉 ${liveCallUrl}\n\n_(Reply with a voice note here, or tap the link above to talk on a live voice call.)_`;
+    const companionText = `📞 *${userName}'s AI Voice Assistant*\n\nHello! ${userName} is currently unavailable.\n\n🎙️ *You can connect in 2 ways:*\n1️⃣ *Voice Note / Chat:* Tap and hold the mic button in this chat to send a voice note — I will reply immediately in English (or in natural Urdu if you speak Urdu!).\n2️⃣ *Live Phone Call Studio:* Tap the link below to talk live with me in real-time:\n👉 ${liveCallUrl}\n\n_(السلام علیکم! ${userName} اس وقت دستیاب نہیں ہیں۔ آپ یہیں اردو میں وائس میسج بھیج کر مجھ سے بات کر سکتے ہیں، میں خود بخود اردو میں جواب دوں گا۔)_`;
 
     await sock.sendMessage(callerJid, {
       text: companionText
@@ -317,19 +331,19 @@ async function _processMessage(msg, jid) {
       const transcription = await groq.audio.transcriptions.create({
         file: audioFile,
         model: GROQ_STT_MODEL,
-        prompt: "Urdu and English speech. السلام علیکم، میں حسنین سے بات کرنا چاہتا ہوں، کیا حال ہے، سب خیریت ہے۔"
+        prompt: "English and Urdu conversational speech. Hello, how are you? السلام علیکم، کیا حال ہے، آپ کیسے ہیں؟"
       });
 
       userText = (transcription.text || "").trim();
       console.log(`[STT] Result: "${userText}"`);
 
       if (!userText) {
-        await safeSendText(jid, "معذرت، میں آپ کا وائس میسج واضح طور پر نہیں سن سکا۔ برائے مہربانی دوبارہ بھیجیں یا ٹیکسٹ میسج کریں۔");
+        await safeSendText(jid, "Sorry, I could not hear your voice note clearly. Please try sending it again or type your message. (معذرت، میں آپ کا وائس میسج واضح طور پر نہیں سن سکا۔ برائے مہربانی دوبارہ بھیجیں یا ٹیکسٹ کریں۔)");
         return;
       }
     } catch (sttErr) {
       console.error(`[STT ERROR]`, sttErr.message);
-      await safeSendText(jid, "معذرت، وائس میسج پراسیس کرنے میں دشواری پیش آئی۔ برائے مہربانی دوبارہ بھیجیں یا لکھ کر میسج کریں۔");
+      await safeSendText(jid, "Sorry, I encountered an issue processing that voice note. Please try sending it again or type your message.");
       return;
     }
 
@@ -377,14 +391,18 @@ async function _processMessage(msg, jid) {
     aiReplyText = (completion.choices?.[0]?.message?.content || "").trim();
 
     if (!aiReplyText) {
-      aiReplyText = "وعلیکم السلام! میں نے آپ کا پیغام نوٹ کر لیا ہے، میں حسنین کو مطلع کر دوں گا۔";
+      aiReplyText = isUrduInput(userText)
+        ? "وعلیکم السلام! میں نے آپ کا پیغام نوٹ کر لیا ہے، میں حسنین کو مطلع کر دوں گا۔"
+        : "Thank you! I have received your message and will notify Husnain right away.";
     }
 
     console.log(`[LLM] Response: "${aiReplyText}"`);
     appendHistory(jid, "assistant", aiReplyText);
   } catch (llmErr) {
     console.error(`[LLM ERROR]`, llmErr.message);
-    aiReplyText = "معذرت، اس وقت رابطہ میں تاخیر ہو رہی ہے۔ میں نے آپ کا پیغام نوٹ کر لیا ہے۔";
+    aiReplyText = isUrduInput(userText)
+      ? "معذرت، اس وقت رابطہ میں تاخیر ہو رہی ہے۔ میں نے آپ کا پیغام نوٹ کر لیا ہے۔"
+      : "I apologize, there was a temporary delay in connecting. I have noted your message and will notify Husnain.";
   }
 
   // ── TTS Synthesis & Send Voice Note ───────────────────────────────────

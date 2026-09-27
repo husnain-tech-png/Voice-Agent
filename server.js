@@ -460,6 +460,11 @@ async function synthesizeElevenLabs(text, voiceId, signal = null, retries = 2, o
       return await elevenLabsLimiter.run(async () => {
         if (signal && signal.aborted) throw new Error("Aborted");
 
+        const hasUrdu = /[\u0600-\u06FF]/.test(cleanText);
+        // Default to ultra-fast eleven_flash_v2_5 for English; use eleven_multilingual_v2 when Urdu is detected
+        const primaryModel = hasUrdu ? "eleven_multilingual_v2" : "eleven_flash_v2_5";
+        const fallbackModel = hasUrdu ? "eleven_flash_v2_5" : "eleven_multilingual_v2";
+
         let response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoice}/stream?optimize_streaming_latency=3&output_format=${outputFormat}`, {
           method: "POST",
           headers: {
@@ -469,7 +474,7 @@ async function synthesizeElevenLabs(text, voiceId, signal = null, retries = 2, o
           },
           body: JSON.stringify({
             text: cleanText,
-            model_id: "eleven_flash_v2_5", // Ultra-fast low-latency voice model
+            model_id: primaryModel,
             voice_settings: {
               stability: 0.5,
               similarity_boost: 0.75
@@ -483,7 +488,7 @@ async function synthesizeElevenLabs(text, voiceId, signal = null, retries = 2, o
           throw new Error(`ELEVENLABS_429: ${errBody}`);
         }
 
-        // If flash model is not active on this tier, fallback to eleven_multilingual_v2
+        // If primary model is not active on this tier, fallback to alternate model
         if (!response.ok) {
           const errorText = await response.text();
           if (response.status === 404 || (response.status === 400 && errorText.includes("model"))) {
@@ -496,7 +501,7 @@ async function synthesizeElevenLabs(text, voiceId, signal = null, retries = 2, o
               },
               body: JSON.stringify({
                 text: cleanText,
-                model_id: "eleven_multilingual_v2",
+                model_id: fallbackModel,
                 voice_settings: {
                   stability: 0.5,
                   similarity_boost: 0.75
@@ -572,6 +577,7 @@ async function transcribeWithWhisper(audioBuffer, originalname = "audio.webm", m
   const transcription = await groq.audio.transcriptions.create({
     file: fileObj,
     model: "whisper-large-v3-turbo",
+    prompt: "English and Urdu conversational speech. Hello, how are you? السلام علیکم، کیا حال ہے، آپ کیسے ہیں؟",
     response_format: "json"
   });
 
@@ -717,7 +723,7 @@ app.post("/chat", async (req, res) => {
         {
           role: "system",
           content:
-            "You are a friendly, highly articulate AI voice assistant speaking with a natural human male voice (Charlie). If the user speaks or writes in Urdu or Roman Urdu, reply in natural, everyday conversational Pakistani Urdu (e.g. 'السلام علیکم! جی فرمائیں، میں آپ کی کیا مدد کر سکتا ہوں؟'). Keep answers natural, clear, polite, and concise (2-3 sentences), so they can be spoken aloud smoothly."
+            "You are Charlie, a polite, friendly, and articulate male AI voice assistant. DEFAULT LANGUAGE IS ENGLISH: By default, always speak and respond in natural, clear, polite English. DYNAMIC LANGUAGE DETECTION: Automatically detect the user's language. If the person speaks or writes in Urdu or Roman Urdu (e.g. 'السلام علیکم', 'کیا حال ہے', 'Salam', 'Assalam-o-Alaikum', 'kya haal hai', 'kaise ho', 'aap kaise hain'), dynamically switch and reply in authentic, natural, conversational Pakistani Urdu in proper Urdu script (e.g. 'وعلیکم السلام! جی فرمائیں، میں آپ کی کیا مدد کر سکتا ہوں؟'). If the user speaks in English, always reply in English. Keep answers natural, clear, polite, and concise (2-3 sentences max) without markdown formatting, asterisks, or emojis."
         },
         {
           role: "user",
@@ -897,7 +903,7 @@ app.post("/voice-chat", upload.single("audio"), async (req, res) => {
         {
           role: "system",
           content:
-            "You are a knowledgeable, highly accurate AI voice assistant. Provide authentic, accurate information in the language requested by the user (such as Urdu or English). Keep answers natural, clear, and concise (2-3 sentences), so they can be spoken aloud smoothly."
+            "You are Charlie, a polite, friendly, and articulate male AI voice assistant. DEFAULT LANGUAGE IS ENGLISH: By default, always speak and respond in natural, clear, polite English. DYNAMIC LANGUAGE DETECTION: Automatically detect the user's language. If the person speaks or writes in Urdu or Roman Urdu (e.g. 'السلام علیکم', 'کیا حال ہے', 'Salam', 'Assalam-o-Alaikum', 'kya haal hai', 'kaise ho', 'aap kaise hain'), dynamically switch and reply in authentic, natural, conversational Pakistani Urdu in proper Urdu script (e.g. 'وعلیکم السلام! جی فرمائیں، میں آپ کی کیا مدد کر سکتا ہوں؟'). If the user speaks in English, always reply in English. Keep answers natural, clear, polite, and concise (2-3 sentences max) without markdown formatting, asterisks, or emojis."
         },
         {
           role: "user",
@@ -1159,7 +1165,7 @@ async function handleStreamingPipeline(ws, session, userText, sttLatencyMs = 0) 
             role: "system",
             content:
               session.systemPrompt ||
-              "You are a knowledgeable, highly accurate AI voice assistant. Provide authentic, accurate information in the language requested by the user (such as Urdu or English). Keep answers natural, clear, and concise (2-3 sentences), so they can be spoken aloud in real-time."
+              "You are Charlie, a polite, friendly, and articulate male AI voice assistant. DEFAULT LANGUAGE IS ENGLISH: By default, always speak and respond in natural, clear, polite English. DYNAMIC LANGUAGE DETECTION: Automatically detect the user's language. If the person speaks or writes in Urdu or Roman Urdu (e.g. 'السلام علیکم', 'کیا حال ہے', 'Salam', 'Assalam-o-Alaikum', 'kya haal hai', 'kaise ho', 'aap kaise hain'), dynamically switch and reply in authentic, natural, conversational Pakistani Urdu in proper Urdu script (e.g. 'وعلیکم السلام! جی فرمائیں، میں آپ کی کیا مدد کر سکتا ہوں؟'). If the user speaks in English, always reply in English. Keep answers natural, clear, polite, and concise (2-3 sentences max) without markdown formatting, asterisks, or emojis."
           },
           {
             role: "user",
@@ -1309,7 +1315,7 @@ browserWss.on("connection", (ws, req) => {
   const session = {
     id: sessionId,
     voiceId: env.DEFAULT_ELEVENLABS_VOICE,
-    systemPrompt: "You are a friendly, highly articulate AI voice assistant speaking in a natural human male voice (Charlie). If the user speaks in Urdu or Roman Urdu, reply in natural, everyday conversational Pakistani Urdu (e.g. 'السلام علیکم! جی فرمائیں، میں آپ کی کیا مدد کر سکتا ہوں؟'). Keep answers natural, clear, polite, and concise (2-3 sentences), so they can be spoken aloud in real-time.",
+    systemPrompt: "You are Charlie, a polite, friendly, and articulate male AI voice assistant. DEFAULT LANGUAGE IS ENGLISH: By default, always speak and respond in natural, clear, polite English. DYNAMIC LANGUAGE DETECTION: Automatically detect the user's language. If the person speaks or writes in Urdu or Roman Urdu (e.g. 'السلام علیکم', 'کیا حال ہے', 'Salam', 'Assalam-o-Alaikum', 'kya haal hai', 'kaise ho', 'aap kaise hain'), dynamically switch and reply in authentic, natural, conversational Pakistani Urdu in proper Urdu script (e.g. 'وعلیکم السلام! جی فرمائیں، میں آپ کی کیا مدد کر سکتا ہوں؟'). If the user speaks in English, always reply in English. Keep answers natural, clear, polite, and concise (2-3 sentences max) without markdown formatting, asterisks, or emojis.",
     abortController: null,
     isProcessing: false,
     audioChunks: [],
@@ -1600,7 +1606,7 @@ async function handleTwilioCallerUtterance(ws, session, mulawBuffer) {
           {
             role: "system",
             content:
-              "You are a polite, friendly AI telephone assistant speaking with a natural human male voice (Charlie). If the caller speaks in Urdu or Roman Urdu, respond in natural, everyday conversational Pakistani Urdu (e.g. 'السلام علیکم! جی فرمائیں، میں آپ کی کیا مدد کر سکتا ہوں؟'). Keep answers clear, polite, natural, and concise (1 to 2 short sentences), so the caller can easily follow over the telephone."
+              "You are Charlie, a polite, friendly AI telephone assistant speaking with a natural human male voice. DEFAULT LANGUAGE IS ENGLISH: By default, always speak and respond in natural, clear English. DYNAMIC LANGUAGE DETECTION: Automatically detect the caller's language. If the caller speaks or writes in Urdu or Roman Urdu (e.g. 'السلام علیکم', 'کیا حال ہے', 'Salam', 'Assalam-o-Alaikum', 'kya haal hai', 'kaise ho'), dynamically switch and respond in authentic, natural conversational Pakistani Urdu in Urdu script (e.g. 'وعلیکم السلام! جی فرمائیں، میں آپ کی کیا مدد کر سکتا ہوں؟'). If the caller speaks in English, always reply in English. Keep answers clear, polite, natural, and concise (1 to 2 short sentences), without markdown or special symbols, so the caller can easily follow over the telephone."
           },
           ...session.history
         ],
