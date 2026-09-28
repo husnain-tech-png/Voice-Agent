@@ -96,8 +96,8 @@ CRITICAL CONVERSATIONAL & LANGUAGE RULES:
    - Keep your answer short, clear, and conversational (2 to 3 sentences maximum).
 4. HANDLING WHERE ${userName} IS:
    - If asked where ${userName} is or why they didn't answer the call, politely explain that they are currently occupied/busy, and you are taking their messages or assisting them right now.
-5. ABSOLUTELY NO MARKDOWN OR SPECIAL SYMBOLS:
-   - Crucial: NEVER use markdown symbols (no asterisks *, no bullet points -, no emojis in your spoken words, no numbered lists, no URLs) because your response is converted directly into spoken audio voice notes. Speak smoothly and naturally.`;
+5. CLEAN CONVERSATIONAL FORMATTING:
+   - Keep replies natural, direct, and conversational without markdown headers, bullet lists, or bolding asterisks. Speak smoothly and naturally.`;
 }
 
 /**
@@ -405,36 +405,58 @@ async function _processMessage(msg, jid) {
       : "I apologize, there was a temporary delay in connecting. I have noted your message and will notify Husnain.";
   }
 
-  // ── TTS Synthesis & Send Voice Note ───────────────────────────────────
-  try {
-    console.log(`[TTS] Synthesizing reply with ElevenLabs Charlie (${ELEVENLABS_VOICE_ID})...`);
-    const oggBuffer = await synthesizeToWhatsAppOpus(aiReplyText, ELEVENLABS_VOICE_ID);
+  // ── Send Reply: Text for Text Messages, Voice Note for Voice Messages ────
+  if (!isAudio) {
+    // 💬 Text Message -> Reply with Text Message
+    try {
+      console.log(`[TEXT] Sending text reply to +${senderNumber}: "${aiReplyText}"`);
+      await safeSendText(jid, aiReplyText, msg);
+      console.log(`[SENT] Text message delivered to +${senderNumber}`);
 
-    await sock.sendMessage(
-      jid,
-      {
-        audio: oggBuffer,
-        mimetype: "audio/ogg; codecs=opus",
-        ptt: true
-      },
-      { quoted: msg }
-    );
+      logCallRecord({
+        callerNumber: `+${senderNumber}`,
+        type: "WhatsApp Text Message Exchange",
+        transcript: [
+          { role: "user", text: userText },
+          { role: "assistant", text: aiReplyText }
+        ],
+        summary: `User: "${userText}". AI: "${aiReplyText}".`
+      });
+    } catch (textErr) {
+      console.error(`[TEXT SEND ERROR]`, textErr.message);
+    }
+  } else {
+    // 🎙️ Voice Message -> Reply with Spoken Voice Note (PTT)
+    try {
+      console.log(`[TTS] Synthesizing voice note reply with ElevenLabs Charlie (${ELEVENLABS_VOICE_ID})...`);
+      const oggBuffer = await synthesizeToWhatsAppOpus(aiReplyText, ELEVENLABS_VOICE_ID);
 
-    console.log(`[SENT] Voice note delivered to +${senderNumber}`);
+      await sock.sendMessage(
+        jid,
+        {
+          audio: oggBuffer,
+          mimetype: "audio/ogg; codecs=opus",
+          ptt: true
+        },
+        { quoted: msg }
+      );
 
-    logCallRecord({
-      callerNumber: `+${senderNumber}`,
-      type: isAudio ? "WhatsApp Voice Note Exchange" : "WhatsApp Chat Exchange",
-      transcript: [
-        { role: "user", text: userText },
-        { role: "assistant", text: aiReplyText }
-      ],
-      summary: `User: "${userText}". AI: "${aiReplyText}".`
-    });
-  } catch (ttsErr) {
-    console.error(`[TTS ERROR]`, ttsErr.message);
-    // Fallback: send as text message if voice synthesis fails
-    await safeSendText(jid, aiReplyText, msg);
+      console.log(`[SENT] Voice note delivered to +${senderNumber}`);
+
+      logCallRecord({
+        callerNumber: `+${senderNumber}`,
+        type: "WhatsApp Voice Note Exchange",
+        transcript: [
+          { role: "user", text: userText },
+          { role: "assistant", text: aiReplyText }
+        ],
+        summary: `User: "${userText}". AI: "${aiReplyText}".`
+      });
+    } catch (ttsErr) {
+      console.error(`[TTS ERROR] Voice synthesis failed, falling back to text:`, ttsErr.message);
+      // Fallback: send as text message if voice synthesis fails
+      await safeSendText(jid, aiReplyText, msg);
+    }
   }
 }
 
@@ -570,15 +592,23 @@ async function startWhatsAppBot() {
     }
   });
 
-  // ── Call Interception ───────────────────────────────────────────────────
+  // ── Incoming Calls (Do NOT hang up / Do NOT reject / Let phone ring) ─────
   sock.ev.on("call", async (calls) => {
     if (!Array.isArray(calls)) return;
 
     for (const call of calls) {
       try {
         if (call && call.status === "offer" && call.from) {
-          await sock.rejectCall(call.id, call.from).catch(() => {});
-          await handleCallInterception(call);
+          const callerNumber = call.from.split("@")[0];
+          console.log(`\n[CALL] Incoming call from +${callerNumber} (Call ID: ${call.id}) — Allowing phone to ring normally without auto-hangup.`);
+          logCallRecord({
+            callerNumber: `+${callerNumber}`,
+            type: "Incoming WhatsApp Call (Ringing)",
+            transcript: [
+              { role: "system", text: `Incoming WhatsApp call from +${callerNumber}. Agent kept call active without hanging up.` }
+            ],
+            summary: `Incoming call from +${callerNumber}. Allowed to ring normally.`
+          });
         }
       } catch (callErr) {
         console.error("[CALL ERROR]", callErr.message);
@@ -815,9 +845,9 @@ const httpServer = http.createServer((req, res) => {
         <div class="user-name">${escapeHtml(userName)}</div>
         <div class="user-num">+${escapeHtml(userNum)}</div>
         <div class="features">
-          <div><span>&#x2713;</span> Intercepting incoming calls</div>
-          <div><span>&#x2713;</span> Processing voice notes with AI</div>
-          <div><span>&#x2713;</span> Replying to text messages</div>
+          <div><span>&#x2713;</span> Calls ring normally (no auto-hangup)</div>
+          <div><span>&#x2713;</span> Processing voice notes with AI voice</div>
+          <div><span>&#x2713;</span> Replying to text messages with text</div>
           <div><span>&#x2713;</span> Multi-turn conversation memory</div>
         </div>
       </div>
