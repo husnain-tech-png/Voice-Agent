@@ -1240,7 +1240,173 @@ In [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), we 
 
 ---
 
-## 📚 Key Concepts Dictionary (Updated for Stage 6.3)
+## 🚀 Stage 6.4: Modality-Matching Routing (Text ➔ Text, Voice ➔ Voice) & Non-Intrusive WhatsApp Call Architecture
+
+**Today, we resolved a fundamental user-experience bottleneck in our Personal WhatsApp Voice Agent: aligning interaction modalities and eliminating disruptive call hangups!**
+
+---
+
+### 1. The Problems We Identified
+
+#### ⚠️ Issue A: The Voice-Overload Bug (Text Messages Answered with Voice Notes)
+* **What Happened:**
+  - When someone sent a text message (e.g. *"Salam, kal meeting kis time hai?"*), the agent correctly processed the text, but **always generated an audio voice note** using ElevenLabs Charlie and sent it back as a PTT voice bubble.
+* **Why This Was Bad UX:**
+  - If a contact is in a silent office, classroom, or public transport, they texted because they **wanted to read**. Forcing them to listen to an audio note was inconvenient and unnatural.
+  - Good AI assistants must respect the medium chosen by the user: **Text in ➔ Text out. Voice in ➔ Voice out.**
+
+#### ⚠️ Issue B: The Aggressive Call Hangup & Chat Deflection
+* **What Happened:**
+  - Whenever someone dialed the user's WhatsApp number for a voice call, Baileys emitted a `call` event (`status: "offer"`).
+  - The previous code immediately ran:
+    ```javascript
+    await sock.rejectCall(call.id, call.from);
+    ```
+    This abruptly **hung up / declined** the call on the caller's phone, followed by dropping a voice note and live-call link into their chat.
+* **Why This Was a Problem:**
+  - The owner of the phone (+923154483615) couldn't even answer their own incoming WhatsApp calls because the agent hung up on the caller within 500 milliseconds!
+  - Callers felt rejected, and the chat deflection felt spammy when people just wanted to reach the owner directly.
+
+---
+
+### 2. 🔍 Deep-Dive: Why Can't a WhatsApp Web Bot Pick Up Calls? (The VoIP Protocol Reality)
+
+Many developers assume: *"If the bot can send voice notes, why can't it just answer the WhatsApp call and speak?"*
+
+Here is the underlying technical reality of the WhatsApp protocol:
+
+```mermaid
+flowchart TD
+    subgraph MobileDevice [Official Native WhatsApp Mobile Apps - iOS / Android]
+        M1[Incoming VoIP Call] --> M2[Hardware Audio Stack]
+        M2 --> M3[Proprietary WebRTC / SRTP Audio Engine]
+        M3 --> M4[Decrypted Live Two-Way Audio Stream]
+    end
+
+    subgraph CompanionWeb [WhatsApp Multi-Device Companion Protocol - Baileys / Web]
+        W1[Incoming Call Signaling - status: offer] --> W2[WebSocket wss://web.whatsapp.com/ws/chat]
+        W2 --> W3{Supported Stanzas}
+        W3 -->|Reject Stanza| W4[tag: call, tag: reject - Supported]
+        W3 -->|Audio Media Relaying| W5[❌ NOT SUPPORTED by Meta]
+    end
+```
+
+1. **Companion Protocol Limitation:**
+   - WhatsApp Web and companion libraries (`@whiskeysockets/baileys`) operate over a companion WebSocket connection.
+   - Meta **strictly restricts** real-time voice/video call WebRTC/SRTP media relaying to its official native binaries (iOS, Android, Windows/Mac desktop apps).
+2. **No `acceptCall` Stanza:**
+   - In the Baileys library, the only supported programmatic call method is `sock.rejectCall()`. There is no `acceptCall()` because WhatsApp servers reject companion clients attempting to initiate voice streams.
+3. **The Architectural Solution: Non-Intrusive Call Preservation:**
+   - Instead of forcibly declining/rejecting incoming calls, the agent **simply ignores the call offer** without executing `rejectCall`.
+   - Result: The incoming call **rings normally** on the owner's phone! The owner can pick up their phone and talk to friends or family without interference.
+   - Live AI voice conversations are reserved for dedicated channels that support full-duplex audio: **Phone Lines via Twilio/Telnyx** (`server.js`) and the **Web Live Call Studio** (`http://localhost:3000`).
+
+---
+
+### 3. Visual Architecture: Before vs. After Flow
+
+#### ❌ Before Stage 6.4 (Disruptive & Modality Mismatched)
+```
+[User Texts]  ──────────► [Groq LLM] ──► [ElevenLabs TTS] ──► 🎙️ Sends Voice Note (Unwanted Audio!)
+[User Calls]  ──────────► ❌ sock.rejectCall() (Instantly Declines Call!) ──► 💬 Sends Deflection Chat
+```
+
+#### ✅ After Stage 6.4 (Intelligent Modality-Matching & Non-Intrusive)
+```mermaid
+flowchart TD
+    A[Incoming WhatsApp Interaction] --> B{What did the user do?}
+
+    B -->|User Sent a Text Message| C[contentKey: conversation / extendedText]
+    C --> D[Groq LLM Conversational Reasoning]
+    D --> E[safeSendText - Quoted Reply]
+    E --> F[💬 User Receives Clean Text Message]
+
+    B -->|User Sent a Voice Note| G[contentKey: audioMessage]
+    G --> H[Groq Whisper STT Multilingual Transcription]
+    H --> I[Groq LLM Conversational Reasoning]
+    I --> J[ElevenLabs Charlie TTS / Edge-TTS Fallback]
+    J --> K[FFmpeg Transcode: 48kHz mono Opus OGG]
+    K --> L[sock.sendMessage with ptt: true]
+    L --> M[🎙️ User Receives Spoken Voice Note Reply]
+
+    B -->|User Placed a Voice Call| N[sock.ev.on call - status: offer]
+    N --> O[Log Caller Number & Timestamp to call-history.json]
+    O --> P[🚫 NO sock.rejectCall]
+    P --> Q[🚫 NO Deflection Message in Chat]
+    Q --> R[📲 User Phone Rings Normally - Owner Answers!]
+```
+
+---
+
+### 4. Implementation Details in Code
+
+#### A. Channel-Aware Message Dispatching (`_processMessage`)
+```javascript
+// ── Send Reply: Text for Text Messages, Voice Note for Voice Messages ────
+if (!isAudio) {
+  // 💬 Text Message -> Reply with Text Message
+  console.log(`[TEXT] Sending text reply to +${senderNumber}: "${aiReplyText}"`);
+  await safeSendText(jid, aiReplyText, msg);
+  logCallRecord({
+    callerNumber: `+${senderNumber}`,
+    type: "WhatsApp Text Message Exchange",
+    transcript: [
+      { role: "user", text: userText },
+      { role: "assistant", text: aiReplyText }
+    ],
+    summary: `User: "${userText}". AI: "${aiReplyText}".`
+  });
+} else {
+  // 🎙️ Voice Message -> Reply with Spoken Voice Note (PTT)
+  console.log(`[TTS] Synthesizing voice note reply with ElevenLabs Charlie (${ELEVENLABS_VOICE_ID})...`);
+  const oggBuffer = await synthesizeToWhatsAppOpus(aiReplyText, ELEVENLABS_VOICE_ID);
+  await sock.sendMessage(
+    jid,
+    { audio: oggBuffer, mimetype: "audio/ogg; codecs=opus", ptt: true },
+    { quoted: msg }
+  );
+  logCallRecord({
+    callerNumber: `+${senderNumber}`,
+    type: "WhatsApp Voice Note Exchange",
+    transcript: [
+      { role: "user", text: userText },
+      { role: "assistant", text: aiReplyText }
+    ],
+    summary: `User: "${userText}". AI: "${aiReplyText}".`
+  });
+}
+```
+
+#### B. Non-Intrusive Call Handler (`sock.ev.on("call")`)
+```javascript
+// ── Incoming Calls (Do NOT hang up / Do NOT reject / Let phone ring) ─────
+sock.ev.on("call", async (calls) => {
+  if (!Array.isArray(calls)) return;
+
+  for (const call of calls) {
+    try {
+      if (call && call.status === "offer" && call.from) {
+        const callerNumber = call.from.split("@")[0];
+        console.log(`\n[CALL] Incoming call from +${callerNumber} (Call ID: ${call.id}) — Allowing phone to ring normally without auto-hangup.`);
+        logCallRecord({
+          callerNumber: `+${callerNumber}`,
+          type: "Incoming WhatsApp Call (Ringing)",
+          transcript: [
+            { role: "system", text: `Incoming WhatsApp call from +${callerNumber}. Agent kept call active without hanging up.` }
+          ],
+          summary: `Incoming call from +${callerNumber}. Allowed to ring normally.`
+        });
+      }
+    } catch (callErr) {
+      console.error("[CALL ERROR]", callErr.message);
+    }
+  }
+});
+```
+
+---
+
+## 📚 Key Concepts Dictionary (Updated for Stage 6.4)
 
 | Term | What It Means in Simple Words |
 | :--- | :--- |
@@ -1260,6 +1426,9 @@ In [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), we 
 | **Base64 Data URL** | An image encoded directly into text characters (`data:image/png;base64,...`) so it can be embedded in HTML without needing a separate file. |
 | **Debouncing** | A programming pattern that prevents a function from being executed multiple times simultaneously during rapid-fire events. |
 | **Exponential Backoff** | Gradually increasing the waiting time between reconnection attempts after a network failure to avoid overloading the server. |
+| **Modality Matching** | An interface design standard where an AI agent replies in the exact same format chosen by the user (Text in ➔ Text out, Audio in ➔ Audio out) to avoid cognitive overload. |
+| **Non-Intrusive Call Preservation** | Allowing incoming voice calls to ring untouched on the user's personal device rather than programmatically declining or interrupting them with automated bots. |
+| **Companion WebSocket Protocol** | A secondary client protocol (like WhatsApp Web) designed strictly for messaging synchronization across linked devices, without access to primary carrier/VoIP audio streams. |
 
 
 ---

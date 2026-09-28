@@ -6,9 +6,9 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 ---
 
 ## 🚦 Current Status Summary
-- **Current Phase:** ✅ **Stage 6.3 Fully Functional — English Default with Dynamic Urdu Auto-Detection, Unified Telephony & WhatsApp Prompts, and 4/4 Language Verification**
+- **Current Phase:** ✅ **Stage 6.4 Fully Functional — Modality-Matching Routing (Text ➔ Text, Voice ➔ Voice) & Non-Intrusive Call Preservation**
 - **Protocols & Gateways:** 
-  - 📲 **Personal WhatsApp AI Voice Agent (Stage 6.1 & 6.2 Active - Port 3005):** Node.js Baileys service in [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), direct QR pairing for any phone number, real-time WhatsApp call interception (`sock.rejectCall` + auto AI voice note in Charlie's ElevenLabs voice + 1-tap Live Call link), native PTT voice notes (`audio/ogg; codecs=opus`), Web QR dashboard on `http://localhost:3005/qr`, and status API (`GET /status`).
+  - 📲 **Personal WhatsApp AI Voice Agent (Stage 6.4 Active - Port 3005):** Node.js Baileys service in [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), modality-matching response routing (text messages get clean text responses, voice notes get Charlie's ElevenLabs voice notes), non-intrusive call preservation (no forced call rejection or chat deflection spam; calls ring phone normally), QR pairing dashboard on `http://localhost:3005/qr`, and status API (`GET /status`).
   - 🤖 **WhatsApp Cloud API Voice Agent (Stage 6 Active - Port 8000):** FastAPI server in [`whatsapp-bot/main.py`](file:///c:/voice%20agenty/whatsapp-bot/main.py), Meta Cloud API Webhook (`POST /webhook`, verification `GET /webhook`), Health Diagnostics (`GET /health`), Interactive Swagger Docs (`/docs`), Background Task Audio Pipeline, and Automated Test Suite ([`whatsapp-bot/test-whatsapp.ps1`](file:///c:/voice%20agenty/whatsapp-bot/test-whatsapp.ps1))
   - 🌐 **Telnyx CPaaS & TeXML (Active & Primary):** Full-duplex μ-law (8000Hz) WebSocket on `/telnyx/media-stream`, TeXML Webhook on `/telnyx/incoming`, TeXML App ID `3055170547735332106`, Status on `/api/telnyx/status`, Auto-Sync on `/api/telnyx/sync`
   - 📱 **Mobile Call Forwarding & History:** REST endpoints on `/api/forwarding/setup`, `/api/calls/history`, `/api/calls/:callSid`, `/api/calls/test-summary-sms`
@@ -293,10 +293,70 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 - [x] **Automated Language Verification Test Suite (`test-language-detection.js`)**:
   - Built standalone automated test script verifying 4/4 test cases: English default greeting, Urdu script response, Roman Urdu transliteration detection, and persistent English follow-up.
 
+### Stage 6.4: Channel-Aware Modality Routing & Non-Intrusive Call Preservation
+- [x] **Channel Modality-Matching (Text ➔ Text, Voice ➔ Voice)**:
+  - Fixed WhatsApp response routing in [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js):
+    - **Text Messages (`conversation` / `extendedTextMessage`)**: AI replies with a clean, conversational WhatsApp text message via `safeSendText()`. No unnecessary TTS voice note generated.
+    - **Voice Notes (`audioMessage`)**: Groq Whisper STT transcribes incoming `.ogg` Opus audio -> Groq LLM reasons -> ElevenLabs Charlie (or Edge-TTS fallback) synthesizes speech -> sent as native WhatsApp voice note (`audio/ogg; codecs=opus`, `ptt: true`).
+- [x] **Non-Intrusive Call Preservation (No Auto-Hangup / No Chat Deflection Spam)**:
+  - Removed aggressive `sock.rejectCall(call.id, call.from)` and chat deflection voice notes on incoming WhatsApp calls.
+  - WhatsApp VoIP audio is end-to-end encrypted and restricted by Meta to native mobile apps; multi-device companion sockets (Baileys) cannot bridge VoIP audio streams.
+  - Incoming WhatsApp calls now remain completely active and ring normally on the user's mobile device without being forcibly hung up or spamming the caller in chat.
+- [x] **Updated Dashboard Feature List (`http://localhost:3005/qr`)**:
+  - Web dashboard now clearly reflects: *"Calls ring normally (no auto-hangup)"*, *"Processing voice notes with AI voice"*, *"Replying to text messages with text"*.
+
 
 ---
 
 ## 🏗️ Architecture & Data Flow
+
+### Stage 6.4: WhatsApp Modality-Aware Interaction & Call Flow
+```mermaid
+flowchart TD
+    A[Incoming WhatsApp Interaction] --> B{Interaction Modality?}
+    
+    B -->|Text Message| C[Conversation / ExtendedTextMessage]
+    C --> D[Groq LLM Reasoning with Memory]
+    D --> E[safeSendText - Quoted Reply]
+    E --> F[📱 User Receives Text Message Reply]
+    
+    B -->|Voice Note| G[Audio Message .ogg Opus]
+    G --> H[Groq Whisper STT Transcribe]
+    H --> I[Groq LLM Reasoning with Memory]
+    I --> J[ElevenLabs Charlie TTS / Edge Fallback]
+    J --> K[FFmpeg Transcode: 48kHz mono Opus OGG]
+    K --> L[sock.sendMessage ptt: true]
+    L --> M[🎧 User Receives Spoken Voice Note Reply]
+    
+    B -->|WhatsApp Voice Call| N[Call Event: status == offer]
+    N --> O[Log Interaction to call-history.json]
+    O --> P[🚫 NO sock.rejectCall - Never Terminate Call]
+    P --> Q[🚫 NO Deflection Voice Note in Chat]
+    Q --> R[📲 User Phone Rings Normally to Answer]
+```
+
+```
+📱 Caller / Sender on WhatsApp
+          │
+          ├───► 1. Sends Text ("Salam, meeting kab hai?")
+          │        │
+          │        ▼
+          │     [Groq LLM Reasoning] ──► [safeSendText] ──► 💬 Replies in Text
+          │
+          ├───► 2. Sends Voice Note (.ogg Opus)
+          │        │
+          │        ▼
+          │     [Whisper STT] ──► [Groq LLM] ──► [ElevenLabs Charlie TTS] ──► 🎙️ Replies with Voice Note (PTT)
+          │
+          └───► 3. Initiates WhatsApp Audio Call
+                   │
+                   ▼
+                [sock.ev.on('call')]
+                   │
+                   ├─► Log to call-history.json
+                   ├─► 🚫 DO NOT rejectCall (No auto-hangup)
+                   └─► 📞 Phone rings normally — Owner can answer!
+```
 
 ### Stage 6: WhatsApp Voice Agent Pipeline Flow (Voice Note to Voice Note)
 ```
