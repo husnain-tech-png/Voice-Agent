@@ -6,7 +6,7 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 ---
 
 ## 🚦 Current Status Summary
-- **Current Phase:** ✅ **Stage 6.4 Fully Functional — Modality-Matching Routing (Text ➔ Text, Voice ➔ Voice) & Non-Intrusive Call Preservation**
+- **Current Phase:** ✅ **Stage 6.5 WhatsApp Business Calling Architecture & Cost Blueprint (Inbound Free Calling, WebRTC/SIP, & Modality-Matching)**
 - **Protocols & Gateways:** 
   - 📲 **Personal WhatsApp AI Voice Agent (Stage 6.4 Active - Port 3005):** Node.js Baileys service in [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), modality-matching response routing (text messages get clean text responses, voice notes get Charlie's ElevenLabs voice notes), non-intrusive call preservation (no forced call rejection or chat deflection spam; calls ring phone normally), QR pairing dashboard on `http://localhost:3005/qr`, and status API (`GET /status`).
   - 🤖 **WhatsApp Cloud API Voice Agent (Stage 6 Active - Port 8000):** FastAPI server in [`whatsapp-bot/main.py`](file:///c:/voice%20agenty/whatsapp-bot/main.py), Meta Cloud API Webhook (`POST /webhook`, verification `GET /webhook`), Health Diagnostics (`GET /health`), Interactive Swagger Docs (`/docs`), Background Task Audio Pipeline, and Automated Test Suite ([`whatsapp-bot/test-whatsapp.ps1`](file:///c:/voice%20agenty/whatsapp-bot/test-whatsapp.ps1))
@@ -581,10 +581,19 @@ PERSONAL_PHONE_NUMBER=+923154483615
 - [x] **Stage 6.1: Direct Personal WhatsApp Integration via Baileys**:
   - Connect AI voice agent directly to personal SIM WhatsApp without requiring Meta Business verification.
   - Universal QR scan pairing (`http://localhost:3005/qr`), real-time call interception, and native Opus PTT voice notes.
+- [x] **Stage 6.4: Modality Matching & Non-Intrusive Preservation**:
+  - Text messages receive text responses; voice notes receive spoken Charlie voice notes; incoming voice calls ring untouched on user's phone.
+- [x] **Stage 6.5: WhatsApp Business Calling Architecture & Cost Analysis**:
+  - Complete analysis of Meta WhatsApp Business Calling API (inbound calls are 100% FREE from Meta, outbound calls billed per minute).
+  - Designed WebRTC / SIP SDP signaling handshake and audio bridge architecture connecting to Whisper STT, Groq LLM, and Edge-TTS / ElevenLabs.
+  - Documented easy step-by-step Meta Developer setup, phone number migration rules, and 1-tap live call link alternative in [`myprogress.md`](file:///c:/voice%20agenty/myprogress.md).
 - [ ] **Meta Cloud API Permanent System User Token Configuration**:
   - Add production `WHATSAPP_TOKEN` and `PHONE_NUMBER_ID` in `whatsapp-bot/.env` to link to user's registered WhatsApp business number.
+- [ ] **Meta Cloud API WebRTC Calling Media Bridge**:
+  - Implement full-duplex WebRTC audio connection using Pion or Mediasoup for direct in-app WhatsApp live voice calling.
 - [ ] **Client-Side Neural VAD (Silero VAD)**:
   - High-accuracy ML voice detection in the browser to eliminate button pressing entirely.
 - [ ] **Custom Character Personas & Prompt Presets**:
   - Switchable personas: Hotel Concierge, Tech Support Specialist, Medical Receptionist, Catbot.
+
 

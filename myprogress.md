@@ -8,7 +8,7 @@ A voice agent needs three main superpowers:
 2. **Brain (LLM - Large Language Model):** Reads the words, understands what you mean, and thinks of a smart response.
 3. **Mouth (Text-to-Speech):** Speaks the answer aloud so you can hear it.
 
-🎉 **Stage 5, Stage 6, Stage 6.1, Stage 6.2 & Stage 6.3 are now live:** We have officially built **Mobile Setup & Carrier Call Forwarding with SMS Summaries** (Stage 5), **WhatsApp Cloud API Voice Agent** (Stage 6), the **Direct Personal WhatsApp AI Agent with Call Interception** (Stage 6.1), **Charlie's Voice with Natural Pakistani Urdu Conversation & 1-Tap Live Call Link** (Stage 6.2), and **English Default with Dynamic Urdu Language Auto-Detection & 4/4 Verification** (Stage 6.3)! Anyone can scan the QR code to pair their personal WhatsApp number, intercept unanswered calls with an AI voice note in Charlie's natural male voice, converse via authentic Urdu voice notes, or tap the link to talk live with the AI brain!
+🎉 **Stage 5, Stage 6, Stage 6.1, Stage 6.2, Stage 6.3, Stage 6.4 & Stage 6.5 are documented & live:** We have officially built **Mobile Setup & Carrier Call Forwarding with SMS Summaries** (Stage 5), **WhatsApp Cloud API Voice Agent** (Stage 6), the **Direct Personal WhatsApp AI Agent with Call Interception** (Stage 6.1), **Charlie's Voice with Natural Pakistani Urdu Conversation & 1-Tap Live Call Link** (Stage 6.2), **English Default with Dynamic Urdu Language Auto-Detection & 4/4 Verification** (Stage 6.3), **Modality-Matching Routing & Non-Intrusive Call Preservation** (Stage 6.4), and now **WhatsApp Business Calling Architecture, Step-by-Step Guide & Cost Breakdown** (Stage 6.5)! Users can send texts or voice notes with perfectly matched responses, let their personal phone ring normally, or connect the AI directly to enterprise WhatsApp calling with $0.00 inbound call rates!
 
 ---
 
@@ -1406,10 +1406,129 @@ sock.ev.on("call", async (calls) => {
 
 ---
 
-## 📚 Key Concepts Dictionary (Updated for Stage 6.4)
+## 📞 Stage 6.5: WhatsApp Business Calling — Step-by-Step Approach & Cost Analysis
+
+### 1. What is WhatsApp Business Calling? (In Simple Words)
+In WhatsApp, there are two completely different worlds:
+1. **The Standard Apps (Personal WhatsApp & WhatsApp Business Mobile App):**
+   - These are mobile apps installed on your phone.
+   - You can manually press the green button to talk to people, but **Meta does NOT provide any programming API** for software to listen to or answer phone calls in the mobile app.
+   - When using companion libraries like Baileys (`whatsapp-personal.js`), the server only receives a notification that a call is ringing (`status: "offer"`). Baileys operates over the Web Client protocol, which has no access to the live encrypted VoIP voice streams.
+2. **The Official WhatsApp Business Platform (Meta Cloud API v20+ Calling API):**
+   - Meta launched the official **WhatsApp Business Calling API**!
+   - This enterprise API allows businesses and automated AI bots to **directly accept, conduct, and initiate live voice calls inside WhatsApp**!
+   - When a customer taps the call button next to your business name on WhatsApp, the call does NOT ring a physical SIM card — instead, Meta connects the call straight to your server using **WebRTC** or **SIP**!
+   - Your AI can answer immediately, listen in real-time with Whisper STT, think with Groq LLM, and stream spoken voice directly into the caller's ear with sub-second latency!
+
+---
+
+### 2. Is WhatsApp Business Calling Free of Cost? (Complete Cost Breakdown)
+
+> [!IMPORTANT]
+> **Short Answer:** **YES, Inbound WhatsApp Voice Calling is 100% FREE from Meta!**  
+> If customers call your WhatsApp Business number, Meta charges **$0.00** per minute. You only pay for your AI brain infrastructure, which can also be run for **$0.00** using free tiers!
+
+#### Comprehensive Cost Matrix:
+
+| Component | Cost for Inbound Calls (Customer Calls Bot) | Cost for Outbound Calls (Bot Calls Customer) | Notes & Details |
+| :--- | :--- | :--- | :--- |
+| **Meta Platform Calling Fee** | **$0.00 / FREE** | **~$0.005 – $0.03 / min** (Country dependent) | Meta does **not** charge any per-minute fee for user-initiated incoming calls! Outbound calls are billed in 6-second pulses. |
+| **Speech-to-Text (Groq Whisper Turbo)** | **$0.00** (Free Tier) or ~$0.0001 / min | **$0.00** (Free Tier) or ~$0.0001 / min | Groq's Developer Cloud includes free usage credits every month. Beyond free tier, Whisper costs pennies per hour. |
+| **Brain / LLM (Groq Llama 3.3 70B)** | **$0.00** (Free Tier) or ~$0.05 / 1M tokens | **$0.00** (Free Tier) or ~$0.05 / 1M tokens | Groq gives thousands of free requests per day. A 5-minute conversation uses less than $0.0005. |
+| **Text-to-Speech (Edge-TTS)** | **$0.00 / 100% FREE** | **$0.00 / 100% FREE** | Microsoft Edge-TTS (`edge-tts-helper.js`) has **no monthly charges, no character limits, and zero API costs**! |
+| **Text-to-Speech (ElevenLabs Flash / Multilingual)** | **$0.00** (10,000 chars/mo free) or $5/mo Starter | **$0.00** (10,000 chars/mo free) or $5/mo Starter | Optional premium voice (Charlie). Free for ~15-20 short calls per month, then paid. |
+| **Server Hosting (Local / Tunnel)** | **$0.00 / FREE** | **$0.00 / FREE** | Running on your PC with Localtunnel (`loca.lt`) or Ngrok free tier costs $0. |
+| **Total Estimated Cost Per Inbound Call** | **$0.00 (Zero Cost)** | **~$0.01 – $0.03 / min** | **With Edge-TTS + Groq Free Tier, incoming calls are 100% free!** |
+
+---
+
+### 3. Step-by-Step Approach in Easy Steps (Official Meta Calling API)
+
+Here is the exact step-by-step roadmap to connect your AI Voice Agent to official WhatsApp Business Calling:
+
+```mermaid
+flowchart LR
+    A[Customer on WhatsApp] -->|Taps Call Button| B[Meta WhatsApp Cloud API]
+    B -->|WebRTC SDP Offer Webhook| C[Our Node.js / Python Voice Server]
+    C -->|WebRTC SDP Answer 200 OK| B
+    B <===>|Full-Duplex WebRTC Audio Stream| C
+    C -->|RTP Inbound Audio| D[Groq Whisper STT]
+    D -->|Text| E[Groq Llama-3.3 LLM]
+    E -->|Tokens| F[Edge-TTS / ElevenLabs]
+    F -->|RTP Outbound Audio| C
+```
+
+#### Step 1: Create a Meta Developer & Business Account
+1. Visit [developers.facebook.com](https://developers.facebook.com) and log in with your Facebook account.
+2. Click **My Apps** ➔ **Create App**.
+3. Select **Other** as the app use case, then choose **Business**.
+4. In the App Dashboard, scroll to **Add products to your app** and click **Set up** on **WhatsApp**.
+5. Link or create your **Meta Business Account** (Business Manager).
+
+#### Step 2: Register a Dedicated Phone Number
+1. **Important Requirement:** The phone number used for WhatsApp Business API **cannot** be actively logged into the personal WhatsApp mobile app on your phone.
+2. If using an existing SIM, open WhatsApp on the phone, go to **Settings ➔ Account ➔ Delete My Account** (or use a fresh virtual/eSIM number).
+3. In Meta App Dashboard ➔ **WhatsApp** ➔ **API Setup**, click **Add Phone Number**.
+4. Enter your number (e.g. your business mobile), verify it with the 6-digit SMS OTP, and set your Business Display Name.
+
+#### Step 3: Enable the WhatsApp Calling Feature
+1. In the Meta App Dashboard, navigate to **WhatsApp** ➔ **Configuration** ➔ **Calling**.
+2. Toggle **Enable WhatsApp Calling** to **ON**.
+3. Configure your calling protocol: Select **WebRTC** (recommended for web/cloud AI) or **SIP Trunking**.
+4. Under **Webhooks**, subscribe your server endpoint (`https://your-tunnel.loca.lt/webhook`) to the `calls` event field.
+
+#### Step 4: Handle the WebRTC Handshake in Code
+When a customer initiates a call, Meta sends a webhook notification to your server:
+1. **Incoming Call Offer:** Meta sends a `POST /webhook` with event `calls` containing:
+   - `status: "offer"`
+   - `sdp: "v=0\r\no=... (Session Description Protocol)"`
+   - `caller_id: "+92315..."`
+2. **Generate SDP Answer:** Your server creates a WebRTC peer connection, imports Meta's SDP offer, generates an SDP Answer, and returns it to Meta via the Graph API endpoint:
+   ```http
+   POST https://graph.facebook.com/v21.0/{PHONE_NUMBER_ID}/calls
+   {
+     "call_id": "call_123456",
+     "action": "accept",
+     "sdp": "v=0\r\no=..."
+   }
+   ```
+3. Once accepted, Meta opens a bi-directional WebRTC media stream directly to your server!
+
+#### Step 5: Hook the Audio Stream into Our Existing AI Pipeline
+Because our project already contains the complete audio pipeline in [`server.js`](file:///c:/voice%20agenty/server.js):
+- **Incoming Audio Packet (RTP/WebRTC):** Decoded and passed to Groq Whisper Turbo (`whisper-large-v3-turbo`) for instant transcription (~200ms).
+- **Brain Reasoning:** Transcribed text is sent to Groq LLM with streaming enabled (`stream: true`) to generate answer tokens (~80ms).
+- **Outgoing Voice:** Answer text is synthesized using Microsoft Edge-TTS (`edge-tts-helper.js`) or ElevenLabs Flash and streamed as Opus audio packets back into the WebRTC peer connection!
+
+---
+
+### 4. Alternative "Zero-Setup" Approach: 1-Tap Live AI Call Link
+If you do not want to wait for Meta Business verification or don't want to dedicate a separate phone number, you can use our built-in **1-Tap Live AI WebRTC Call Link**:
+
+1. **How it Works:**
+   - Any user on WhatsApp (personal or business) who sends a message or leaves a voice note receives an automated smart invitation:
+     > *"To speak with me live in real-time, tap here: https://voice-agent-husnain.loca.lt"*
+   - When the user taps the link on their smartphone:
+     - Their browser opens instantly (Chrome/Safari).
+     - Full-duplex WebSocket audio connects to [`server.js`](file:///c:/voice%20agenty/server.js).
+     - They can talk back and forth with zero latency, live speech barge-in, and natural voices!
+2. **Advantages:**
+   - Works immediately on any existing personal or business phone number.
+   - Requires zero Meta verification, zero SIP gateways, and zero extra costs.
+   - Supports 100% free unlimited conversations.
+
+---
+
+## 📚 Key Concepts Dictionary (Updated for Stage 6.5)
 
 | Term | What It Means in Simple Words |
 | :--- | :--- |
+| **WhatsApp Calling API** | Meta's official cloud feature allowing software to receive and place live audio calls over WhatsApp via WebRTC or SIP. |
+| **WebRTC (Web Real-Time Communication)** | An open standard and protocol that enables real-time peer-to-peer audio, video, and data transmission with sub-second latency. |
+| **SDP (Session Description Protocol)** | The standardized text format used by WebRTC endpoints during a "handshake" to negotiate audio formats, encryption, and network addresses. |
+| **SIP (Session Initiation Protocol)** | The enterprise telecommunications protocol used to control voice and video calls over IP networks, commonly used in call centers. |
+| **Inbound Call** | A call initiated by the customer/user calling the business. On the WhatsApp Cloud API, this is completely free from Meta ($0.00/min). |
+| **Outbound Call** | A call initiated by the business dialing the customer. Billed by Meta on a per-minute rate based on the destination country. |
 | **Baileys** | An open-source TypeScript/JavaScript library that communicates directly with WhatsApp Web Multi-Device WebSockets without requiring official Meta APIs. |
 | **Call Interception / Deflection** | Programmatically silencing an incoming ring and immediately dispatching an alternative communication channel (like an AI voice note). |
 | **PTT (Push-to-Talk)** | Native WhatsApp voice messages (green microphone bubbles with waveforms) rather than standard audio attachments. |
@@ -1436,9 +1555,13 @@ sock.ev.on("call", async (calls) => {
 ## 🚀 What We Are Ready to Build Next (Future Roadmap)
 1. **Stage 6.1 Direct Personal WhatsApp Integration via Baileys (Completed! ✅):**
    - Universal QR scan pairing (`http://localhost:3005/qr`), real-time call interception, and native Opus PTT voice notes.
-2. **Meta Cloud API Permanent System User Token Configuration (Stage 6):**
-   - Link production credentials and number in `whatsapp-bot/.env` for enterprise deployments.
-3. **Client-Side Neural VAD (Silero VAD):**
+2. **Stage 6.4 Modality Matching & Non-Intrusive Call Preservation (Completed! ✅):**
+   - Clean text replies to text messages, Charlie voice notes to audio messages, and ringing calls preserved.
+3. **Stage 6.5 WhatsApp Business Calling Architecture & Cost Blueprint (Completed! ✅):**
+   - Inbound free calling breakdown ($0.00/min Meta fee), WebRTC/SIP SDP handshake architecture, and 1-tap live call bridge.
+4. **Meta Cloud API WebRTC / SIP Calling Production Deployment:**
+   - Link production WABA credentials and deploy WebRTC RTP audio bridge for real-time live WhatsApp VoIP phone calls.
+5. **Client-Side Neural VAD (Silero VAD):**
    - Pure machine-learning voice activity detection running directly in the browser with zero buttons.
-4. **Custom Character Personas & Prompt Presets:**
+6. **Custom Character Personas & Prompt Presets:**
    - Switchable agent personalities: Hotel Concierge, Tech Support Specialist, Medical Clinic Receptionist, and friendly assistant.
