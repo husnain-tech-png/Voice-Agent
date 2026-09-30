@@ -1,5 +1,221 @@
 [
   {
+    "callSid": "WA_1790780690415_nfee",
+    "callerNumber": "+183902060695663",
+    "channel": "WhatsApp",
+    "type": "Incoming WhatsApp Call (Auto-Rejected)",
+    "startTime": "2026-09-30T15:04:50.415Z",
+    "endTime": "2026-09-30T15:04:50.415Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call from +183902060695663. Auto-rejected and AI voice note sent."
+      }
+    ],
+    "summary": "Call from +183902060695663 auto-rejected. Delivered AI voice note & live call link.",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790780682387_an0z",
+    "callerNumber": "+183902060695663",
+    "channel": "WhatsApp",
+    "type": "Incoming WhatsApp Call (Auto-Rejected)",
+    "startTime": "2026-09-30T15:04:42.388Z",
+    "endTime": "2026-09-30T15:04:42.388Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call from +183902060695663. Auto-rejected and AI voice note sent."
+      }
+    ],
+    "summary": "Call from +183902060695663 auto-rejected. Delivered AI voice note & live call link.",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790780621320_o9i4",
+    "callerNumber": "+183902060695663",
+    "channel": "WhatsApp",
+    "type": "Incoming WhatsApp Call (Auto-Rejected)",
+    "startTime": "2026-09-30T15:03:41.320Z",
+    "endTime": "2026-09-30T15:03:41.320Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call from +183902060695663. Auto-rejected and AI voice note sent."
+      }
+    ],
+    "summary": "Call from +183902060695663 auto-rejected. Delivered AI voice note & live call link.",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790780621314_06za",
+    "callerNumber": "+183902060695663",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Call (Auto-Intercepted)",
+    "startTime": "2026-09-30T15:03:41.314Z",
+    "endTime": "2026-09-30T15:03:41.314Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call intercepted."
+      },
+      {
+        "role": "assistant",
+        "text": "Hello! You have reached husnain bhatti's AI voice assistant. He is currently unavailable. Please leave a voice note here to talk to me, or tap the link to join a live call. السلام علیکم! اگر آپ اردو میں بات کرنا چاہیں تو بے جھجھک اردو میں بول سکتے ہیں، میں آپ کی مکمل رہنمائی کروں گا۔"
+      }
+    ],
+    "summary": "Call from +183902060695663 intercepted. Delivered Charlie Urdu/English voice note & live call studio link.",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790780614329_sgt0",
+    "callerNumber": "+183902060695663",
+    "channel": "WhatsApp",
+    "type": "Incoming WhatsApp Call (Auto-Rejected)",
+    "startTime": "2026-09-30T15:03:34.329Z",
+    "endTime": "2026-09-30T15:03:34.329Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call from +183902060695663. Auto-rejected and AI voice note sent."
+      }
+    ],
+    "summary": "Call from +183902060695663 auto-rejected. Delivered AI voice note & live call link.",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790778914408_8yak",
+    "callerNumber": "+183902060695663",
+    "channel": "WhatsApp",
+    "type": "Incoming WhatsApp Call (Auto-Rejected)",
+    "startTime": "2026-09-30T14:35:14.408Z",
+    "endTime": "2026-09-30T14:35:14.408Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call from +183902060695663. Auto-rejected and AI voice note sent."
+      }
+    ],
+    "summary": "Call from +183902060695663 auto-rejected. Delivered AI voice note & live call link.",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790778914404_s7s0",
+    "callerNumber": "+183902060695663",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Call (Auto-Intercepted)",
+    "startTime": "2026-09-30T14:35:14.404Z",
+    "endTime": "2026-09-30T14:35:14.404Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call intercepted."
+      },
+      {
+        "role": "assistant",
+        "text": "Hello! You have reached husnain bhatti's AI voice assistant. He is currently unavailable. Please leave a voice note here to talk to me, or tap the link to join a live call. السلام علیکم! اگر آپ اردو میں بات کرنا چاہیں تو بے جھجھک اردو میں بول سکتے ہیں، میں آپ کی مکمل رہنمائی کروں گا۔"
+      }
+    ],
+    "summary": "Call from +183902060695663 intercepted. Delivered Charlie Urdu/English voice note & live call studio link.",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790778896229_bb0d",
+    "callerNumber": "+183902060695663",
+    "channel": "WhatsApp",
+    "type": "Incoming WhatsApp Call (Auto-Rejected)",
+    "startTime": "2026-09-30T14:34:56.229Z",
+    "endTime": "2026-09-30T14:34:56.229Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call from +183902060695663. Auto-rejected and AI voice note sent."
+      }
+    ],
+    "summary": "Call from +183902060695663 auto-rejected. Delivered AI voice note & live call link.",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790778762900_mwrl",
+    "callerNumber": "+253978981978268",
+    "channel": "WhatsApp",
+    "type": "Incoming WhatsApp Call (Auto-Rejected)",
+    "startTime": "2026-09-30T14:32:42.900Z",
+    "endTime": "2026-09-30T14:32:42.900Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call from +253978981978268. Auto-rejected and AI voice note sent."
+      }
+    ],
+    "summary": "Call from +253978981978268 auto-rejected. Delivered AI voice note & live call link.",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790778762893_4yly",
+    "callerNumber": "+253978981978268",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Call (Auto-Intercepted)",
+    "startTime": "2026-09-30T14:32:42.893Z",
+    "endTime": "2026-09-30T14:32:42.893Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call intercepted."
+      },
+      {
+        "role": "assistant",
+        "text": "Hello! You have reached husnain bhatti's AI voice assistant. He is currently unavailable. Please leave a voice note here to talk to me, or tap the link to join a live call. السلام علیکم! اگر آپ اردو میں بات کرنا چاہیں تو بے جھجھک اردو میں بول سکتے ہیں، میں آپ کی مکمل رہنمائی کروں گا۔"
+      }
+    ],
+    "summary": "Call from +253978981978268 intercepted. Delivered Charlie Urdu/English voice note & live call studio link.",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790778754811_t4u3",
+    "callerNumber": "+253978981978268",
+    "channel": "WhatsApp",
+    "type": "Incoming WhatsApp Call (Auto-Rejected)",
+    "startTime": "2026-09-30T14:32:34.812Z",
+    "endTime": "2026-09-30T14:32:34.812Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call from +253978981978268. Auto-rejected and AI voice note sent."
+      }
+    ],
+    "summary": "Call from +253978981978268 auto-rejected. Delivered AI voice note & live call link.",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790778750045_kl6z",
+    "callerNumber": "+253978981978268",
+    "channel": "WhatsApp",
+    "type": "Incoming WhatsApp Call (Auto-Rejected)",
+    "startTime": "2026-09-30T14:32:30.045Z",
+    "endTime": "2026-09-30T14:32:30.045Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call from +253978981978268. Auto-rejected and AI voice note sent."
+      }
+    ],
+    "summary": "Call from +253978981978268 auto-rejected. Delivered AI voice note & live call link.",
+    "smsSent": false
+  },
+  {
     "callSid": "WA_1790777172497_ddod",
     "callerNumber": "+39814900486311",
     "channel": "WhatsApp",
