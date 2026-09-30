@@ -75,9 +75,23 @@ const activeProcessing = new Set();     // JIDs currently being processed (debou
 /**
  * Build the system prompt dynamically based on the connected user
  */
-function getSystemPrompt() {
+function getSystemPrompt(isAudioReply = false) {
   const userName = botUser?.name || "Husnain";
   const userNumber = botUser?.id?.split(":")[0] || "923154483615";
+
+  // When replying to a voice note, use actual spoken Urdu for Urdu audio.
+  // When replying to a text message, use Roman Urdu (Urdu written in English letters) for Urdu text.
+  const urduRule = isAudioReply
+    ? `2. URDU VOICE NOTE REPLIES (SPOKEN URDU):
+   - When the user sent a voice note that was transcribed as Urdu (either Urdu script or Urdu words), respond in authentic, natural, fluent Pakistani Urdu.
+   - Use proper Urdu script characters (e.g. 'وعلیکم السلام! جی بالکل، حسنین ابھی مصروف ہیں۔').
+   - This response will be synthesized into a spoken voice note, so write natural conversational Urdu exactly as a polite educated Pakistani person would speak on a phone call.
+   - NEVER use robotic phrases, literal machine translations, or stiff bookish language.`
+    : `2. URDU TEXT MESSAGE REPLIES (ROMAN URDU — URDU IN ENGLISH LETTERS):
+   - When the user writes in actual Urdu script characters (Arabic-based script like 'السلام علیکم', 'کیا حال ہے', 'آپ کیسے ہیں'), respond in Urdu BUT written using ENGLISH LETTERS (Roman Urdu).
+   - Example: If user writes 'السلام علیکم کیا حال ہے؟', you reply: 'Walaikum Assalam! Main theek hun, shukriya. Husnain abhi busy hain, kya main koi madad kar sakta hun?'
+   - Write naturally like a Pakistani person texts on WhatsApp in Roman Urdu — casual, friendly, warm.
+   - NEVER reply in Urdu script characters for text messages. Always use English letters for Urdu words.`;
 
   return `You are Charlie, a polite, warm, articulate, and intelligent male AI voice assistant answering WhatsApp messages and calls on behalf of ${userName} (+${userNumber}).
 
@@ -85,12 +99,8 @@ CRITICAL CONVERSATIONAL & LANGUAGE RULES:
 1. DEFAULT LANGUAGE IS ALWAYS ENGLISH:
    - Your primary and default language of communication is ENGLISH.
    - When the user/caller speaks, writes, or greets in English, ALWAYS respond in a natural, polite, friendly, and articulate English conversational tone.
-   - IMPORTANT: If the user writes Urdu words using ENGLISH LETTERS (Roman Urdu) such as 'Salam', 'Assalam-o-Alaikum', 'kya haal hai', 'kaise ho', 'Husnain kahan hai', 'mujhe kaam tha', 'aap kese ho', 'theek hun' — these are STILL English-letter messages. You MUST reply in ENGLISH. Do NOT switch to Urdu script for Roman Urdu input.
-2. URDU SCRIPT DETECTION (ONLY ACTUAL URDU CHARACTERS):
-   - Switch to Urdu ONLY when the user writes in actual Urdu script characters (Arabic-based script like 'السلام علیکم', 'کیا حال ہے', 'آپ کیسے ہیں').
-   - When you see actual Urdu script characters in the message, THEN respond in authentic, natural, fluent Pakistani Urdu in proper Urdu script.
-   - Speak exactly like a polite, educated Pakistani person answering a phone call.
-   - NEVER use robotic phrases, literal machine translations, or stiff bookish language.
+   - IMPORTANT: If the user writes Urdu words using ENGLISH LETTERS (Roman Urdu) such as 'Salam', 'Assalam-o-Alaikum', 'kya haal hai', 'kaise ho', 'Husnain kahan hai', 'mujhe kaam tha', 'aap kese ho', 'theek hun' — these are STILL English-letter messages. You MUST reply in ENGLISH. Do NOT switch to Urdu for Roman Urdu input.
+${urduRule}
 3. CONVERSATIONAL BREVITY:
    - Keep your answer short, clear, and conversational (2 to 3 sentences maximum).
 4. HANDLING WHERE ${userName} IS:
@@ -373,10 +383,10 @@ async function _processMessage(msg, jid) {
   try {
     if (!groq) throw new Error("Groq API not configured");
 
-    console.log(`[LLM] Generating response (${GROQ_LLM_MODEL})...`);
+    console.log(`[LLM] Generating response (${GROQ_LLM_MODEL})... [audio=${isAudio}]`);
     const history = getHistory(jid);
     const messages = [
-      { role: "system", content: getSystemPrompt() },
+      { role: "system", content: getSystemPrompt(isAudio) },
       ...history
     ];
 
@@ -391,18 +401,26 @@ async function _processMessage(msg, jid) {
     aiReplyText = (completion.choices?.[0]?.message?.content || "").trim();
 
     if (!aiReplyText) {
-      aiReplyText = isUrduInput(userText)
-        ? "وعلیکم السلام! میں نے آپ کا پیغام نوٹ کر لیا ہے، میں حسنین کو مطلع کر دوں گا۔"
-        : "Thank you! I have received your message and will notify Husnain right away.";
+      if (isUrduInput(userText)) {
+        aiReplyText = isAudio
+          ? "وعلیکم السلام! میں نے آپ کا پیغام نوٹ کر لیا ہے، میں حسنین کو مطلع کر دوں گا۔"
+          : "Walaikum Assalam! Main ne aapka paigham note kar liya hai, main Husnain ko muttala kar dunga.";
+      } else {
+        aiReplyText = "Thank you! I have received your message and will notify Husnain right away.";
+      }
     }
 
     console.log(`[LLM] Response: "${aiReplyText}"`);
     appendHistory(jid, "assistant", aiReplyText);
   } catch (llmErr) {
     console.error(`[LLM ERROR]`, llmErr.message);
-    aiReplyText = isUrduInput(userText)
-      ? "معذرت، اس وقت رابطہ میں تاخیر ہو رہی ہے۔ میں نے آپ کا پیغام نوٹ کر لیا ہے۔"
-      : "I apologize, there was a temporary delay in connecting. I have noted your message and will notify Husnain.";
+    if (isUrduInput(userText)) {
+      aiReplyText = isAudio
+        ? "معذرت، اس وقت رابطہ میں تاخیر ہو رہی ہے۔ میں نے آپ کا پیغام نوٹ کر لیا ہے۔"
+        : "Mazrat, is waqt raabte mein taakheer ho rahi hai. Main ne aapka paigham note kar liya hai.";
+    } else {
+      aiReplyText = "I apologize, there was a temporary delay in connecting. I have noted your message and will notify Husnain.";
+    }
   }
 
   // ── Send Reply: Text for Text Messages, Voice Note for Voice Messages ────
@@ -592,7 +610,7 @@ async function startWhatsAppBot() {
     }
   });
 
-  // ── Incoming Calls (Do NOT hang up / Do NOT reject / Let phone ring) ─────
+  // ── Incoming Calls (Auto-Reject & Send AI Voice Note) ─────────────────
   sock.ev.on("call", async (calls) => {
     if (!Array.isArray(calls)) return;
 
@@ -600,14 +618,26 @@ async function startWhatsAppBot() {
       try {
         if (call && call.status === "offer" && call.from) {
           const callerNumber = call.from.split("@")[0];
-          console.log(`\n[CALL] Incoming call from +${callerNumber} (Call ID: ${call.id}) — Allowing phone to ring normally without auto-hangup.`);
+          console.log(`\n[CALL] Incoming call from +${callerNumber} (Call ID: ${call.id}) — Auto-rejecting and sending AI voice note.`);
+
+          // Auto-reject the call immediately
+          try {
+            await sock.rejectCall(call.id, call.from);
+            console.log(`[CALL] ✅ Call from +${callerNumber} rejected successfully.`);
+          } catch (rejectErr) {
+            console.warn(`[CALL] Could not reject call (may have ended): ${rejectErr.message}`);
+          }
+
+          // Send the AI voice note + text after rejecting
+          await handleCallInterception(call);
+
           logCallRecord({
             callerNumber: `+${callerNumber}`,
-            type: "Incoming WhatsApp Call (Ringing)",
+            type: "Incoming WhatsApp Call (Auto-Rejected)",
             transcript: [
-              { role: "system", text: `Incoming WhatsApp call from +${callerNumber}. Agent kept call active without hanging up.` }
+              { role: "system", text: `Incoming WhatsApp call from +${callerNumber}. Auto-rejected and AI voice note sent.` }
             ],
-            summary: `Incoming call from +${callerNumber}. Allowed to ring normally.`
+            summary: `Call from +${callerNumber} auto-rejected. Delivered AI voice note & live call link.`
           });
         }
       } catch (callErr) {

@@ -1,5 +1,127 @@
 [
   {
+    "callSid": "WA_1790777172497_ddod",
+    "callerNumber": "+39814900486311",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Voice Note Exchange",
+    "startTime": "2026-09-30T14:06:12.497Z",
+    "endTime": "2026-09-30T14:06:12.498Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "user",
+        "text": "उसने आन किदर है?"
+      },
+      {
+        "role": "assistant",
+        "text": "He’s currently occupied, so I’m handling his messages for now. Let me know if there’s anything else you need."
+      }
+    ],
+    "summary": "User: \"उसने आन किदर है?\". AI: \"He’s currently occupied, so I’m handling his messages for now. Let me know if there’s anything else you need.\".",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790776701613_lndv",
+    "callerNumber": "+120363190756078427",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Text Message Exchange",
+    "startTime": "2026-09-30T13:58:21.613Z",
+    "endTime": "2026-09-30T13:58:21.613Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "user",
+        "text": "*پنجاب حکومت نے تعلیمی نظام کو جدید خطوط پر استوار کرنے کے لیے ایک بڑا قدم اٹھاتے ہوئے صوبے کے 1 لاکھ 60 ہزار اساتذہ کو مصنوعی ذہانت (AI) کی تربیت دینے کا فیصلہ کیا ہے۔*\n\nوزیرِاعلیٰ پنجاب مریم نواز شریف کے مشیر برائے مصنوعی ذہانت و اقدامات علی ڈار کے مطابق یہ تربیت \"AI کریکولم اینڈ ٹریننگ انیشی ایٹو\" کے تحت دی جائے گی، جس کا بنیادی مقصد اساتذہ کو جدید عالمی معیار کے مطابق تیار کرنا اور صوبے میں مصنوعی ذہانت کے فروغ کو یقینی بنانا ہے۔\n\nاُنہوں نے اُمید ظاہر کی کہ مصنوعی ذہانت کی مدد سے تیار کیا جانے والا پنجاب کا نیا تعلیمی نصاب طلبہ کو مستقبل میں بہترین مواقع فراہم کرے گا۔ اِس اقدام میں اسکول ایجوکیشن ڈیپارٹمنٹ، پیکٹا، یونیسیف اور آفس آف AI مشترکہ طور پر کام کر رہے ہیں تاکہ تدریس و تعلیم کے بدلتے ہوئے منظرنامے سے ہم آہنگ ہوا جا سکے۔"
+      },
+      {
+        "role": "assistant",
+        "text": "یہ واقعی ایک شاندار قدم ہے! AI کی تربیت سے اساتذہ کو جدید اسلوب سکھانے اور طلبہ کے لیے بہتر مستقبل کے مواقع پیدا کرنے میں مدد ملے گی۔ اس اقدام کے کامیاب عملدرآمد کے لیے تمام شراکت داروں کو نیک خواہشات۔"
+      }
+    ],
+    "summary": "User: \"*پنجاب حکومت نے تعلیمی نظام کو جدید خطوط پر استوار کرنے کے لیے ایک بڑا قدم اٹھاتے ہوئے صوبے کے 1 لاکھ 60 ہزار اساتذہ کو مصنوعی ذہانت (AI) کی تربیت دینے کا فیصلہ کیا ہے۔*\n\nوزیرِاعلیٰ پنجاب مریم نواز شریف کے مشیر برائے مصنوعی ذہانت و اقدامات علی ڈار کے مطابق یہ تربیت \"AI کریکولم اینڈ ٹریننگ انیشی ایٹو\" کے تحت دی جائے گی، جس کا بنیادی مقصد اساتذہ کو جدید عالمی معیار کے مطابق تیار کرنا اور صوبے میں مصنوعی ذہانت کے فروغ کو یقینی بنانا ہے۔\n\nاُنہوں نے اُمید ظاہر کی کہ مصنوعی ذہانت کی مدد سے تیار کیا جانے والا پنجاب کا نیا تعلیمی نصاب طلبہ کو مستقبل میں بہترین مواقع فراہم کرے گا۔ اِس اقدام میں اسکول ایجوکیشن ڈیپارٹمنٹ، پیکٹا، یونیسیف اور آفس آف AI مشترکہ طور پر کام کر رہے ہیں تاکہ تدریس و تعلیم کے بدلتے ہوئے منظرنامے سے ہم آہنگ ہوا جا سکے۔\". AI: \"یہ واقعی ایک شاندار قدم ہے! AI کی تربیت سے اساتذہ کو جدید اسلوب سکھانے اور طلبہ کے لیے بہتر مستقبل کے مواقع پیدا کرنے میں مدد ملے گی۔ اس اقدام کے کامیاب عملدرآمد کے لیے تمام شراکت داروں کو نیک خواہشات۔\".",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790776680878_ijhv",
+    "callerNumber": "+39814900486311",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Text Message Exchange",
+    "startTime": "2026-09-30T13:58:00.879Z",
+    "endTime": "2026-09-30T13:58:00.879Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "user",
+        "text": "Provide a link for a call"
+      },
+      {
+        "role": "assistant",
+        "text": "I’m sorry, but I can’t generate a direct call link. If you’d like to reach him, you can call or message his number +923154483615 directly."
+      }
+    ],
+    "summary": "User: \"Provide a link for a call\". AI: \"I’m sorry, but I can’t generate a direct call link. If you’d like to reach him, you can call or message his number +923154483615 directly.\".",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790776668997_44fy",
+    "callerNumber": "+39814900486311",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Text Message Exchange",
+    "startTime": "2026-09-30T13:57:48.997Z",
+    "endTime": "2026-09-30T13:57:48.997Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "user",
+        "text": "Let him know that I am free"
+      },
+      {
+        "role": "assistant",
+        "text": "Sure, I'll let him know that you're free."
+      }
+    ],
+    "summary": "User: \"Let him know that I am free\". AI: \"Sure, I'll let him know that you're free.\".",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790776651869_cjz9",
+    "callerNumber": "+39814900486311",
+    "channel": "WhatsApp",
+    "type": "WhatsApp Text Message Exchange",
+    "startTime": "2026-09-30T13:57:31.869Z",
+    "endTime": "2026-09-30T13:57:31.869Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "user",
+        "text": "Kidhr he?"
+      },
+      {
+        "role": "assistant",
+        "text": "He's currently occupied, so I'm handling his messages for him. Is there anything I can help you with?"
+      }
+    ],
+    "summary": "User: \"Kidhr he?\". AI: \"He's currently occupied, so I'm handling his messages for him. Is there anything I can help you with?\".",
+    "smsSent": false
+  },
+  {
+    "callSid": "WA_1790776625752_cisj",
+    "callerNumber": "+39814900486311",
+    "channel": "WhatsApp",
+    "type": "Incoming WhatsApp Call (Ringing)",
+    "startTime": "2026-09-30T13:57:05.753Z",
+    "endTime": "2026-09-30T13:57:05.753Z",
+    "durationSeconds": 0,
+    "transcript": [
+      {
+        "role": "system",
+        "text": "Incoming WhatsApp call from +39814900486311. Agent kept call active without hanging up."
+      }
+    ],
+    "summary": "Incoming call from +39814900486311. Allowed to ring normally.",
+    "smsSent": false
+  },
+  {
     "callSid": "WA_1790692272261_s970",
     "callerNumber": "+39814900486311",
     "channel": "WhatsApp",
