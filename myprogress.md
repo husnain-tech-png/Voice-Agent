@@ -8,7 +8,7 @@ A voice agent needs three main superpowers:
 2. **Brain (LLM - Large Language Model):** Reads the words, understands what you mean, and thinks of a smart response.
 3. **Mouth (Text-to-Speech):** Speaks the answer aloud so you can hear it.
 
-🎉 **Stage 5, Stage 6, Stage 6.1, Stage 6.2, Stage 6.3, Stage 6.4 & Stage 6.5 are documented & live:** We have officially built **Mobile Setup & Carrier Call Forwarding with SMS Summaries** (Stage 5), **WhatsApp Cloud API Voice Agent** (Stage 6), the **Direct Personal WhatsApp AI Agent with Call Interception** (Stage 6.1), **Charlie's Voice with Natural Pakistani Urdu Conversation & 1-Tap Live Call Link** (Stage 6.2), **English Default with Dynamic Urdu Language Auto-Detection & 4/4 Verification** (Stage 6.3), **Modality-Matching Routing & Non-Intrusive Call Preservation** (Stage 6.4), and now **WhatsApp Business Calling Architecture, Step-by-Step Guide & Cost Breakdown** (Stage 6.5)! Users can send texts or voice notes with perfectly matched responses, let their personal phone ring normally, or connect the AI directly to enterprise WhatsApp calling with $0.00 inbound call rates!
+🎉 **Stage 5, Stage 6, Stage 6.1, Stage 6.2, Stage 6.3, Stage 6.4, Stage 6.5, Stage 6.6 & Stage 7 are documented & live:** We have officially built **Mobile Setup & Carrier Call Forwarding with SMS Summaries** (Stage 5), **WhatsApp Cloud API Voice Agent** (Stage 6), the **Direct Personal WhatsApp AI Agent with Call Interception** (Stage 6.1), **Charlie's Voice with Natural Pakistani Urdu Conversation & 1-Tap Live Call Link** (Stage 6.2), **English Default with Dynamic Urdu Language Auto-Detection & 4/4 Verification** (Stage 6.3), **Modality-Matching Routing & Non-Intrusive Call Preservation** (Stage 6.4), **WhatsApp Business Calling Architecture & Cost Analysis** (Stage 6.5), **Auto-Reject Calls & Enhanced Urdu-English Dual Modality with Roman Urdu Text & Spoken Urdu Voice Notes** (Stage 6.6), and our brand-new **Native Cross-Platform Mobile & Desktop App for iOS, Android & macOS (`VoiceAgentApp`)** (Stage 7)! Users can interact via browser, phone line, WhatsApp, or install the native AI Voice Agent app directly on their mobile phone or Mac!
 
 ---
 
@@ -1519,10 +1519,176 @@ If you do not want to wait for Meta Business verification or don't want to dedic
 
 ---
 
-## 📚 Key Concepts Dictionary (Updated for Stage 6.5)
+## 📵 What We Did in Stage 6.6: Auto-Reject WhatsApp Calls & Roman Urdu Text / Spoken Urdu Voice Notes (Step-by-Step in Easy Words)
+
+### 1. Why Auto-Reject WhatsApp Calls? (Call Interception & Smart Deflection)
+* **The Problem:**
+  - When the user is busy in meetings, driving, or sleeping, callers on WhatsApp normally hear standard ringing for 30–45 seconds until it times out.
+  - Callers wonder: *"Is he ignoring me? Is his phone out of reach?"*
+* **The Solution (Instant Auto-Reject + Smart AI Voice Greeting):**
+  - In [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), the moment any contact dials the user's WhatsApp number:
+    1. The `sock.ev.on("call")` event listener intercepts the incoming call offer (`status: "offer"`).
+    2. The bot immediately executes `await sock.rejectCall(call.id, call.from)`.
+    3. The ringing stops immediately on both ends so nobody waits in silence.
+    4. Within 2 seconds, Charlie delivers a warm, professional spoken AI voice note:
+       > *"Hello! Thank you for calling Husnain. He is currently occupied and unable to take your call right now. Please leave a voice message right here in this chat, or tap the link below to speak with me live!"*
+    5. The bot also sends the **1-Tap Live AI Studio link** (`https://voice-agent-husnain.loca.lt`) so the caller can have a full-duplex WebRTC conversation with the AI brain right away.
+    6. The call is logged directly to [`call-history.json`](file:///c:/voice%20agenty/call-history.json) as `"Incoming WhatsApp Call (Auto-Rejected)"`.
+
+---
+
+### 2. The Language & Modality Challenge (Urdu Text vs. Spoken Audio)
+In Pakistani culture and across South Asia, WhatsApp communication has a very specific unwritten rule:
+1. **When people text:** Nobody types in traditional Arabic/Nastaliq script on a smartphone keyboard because it is slow and awkward. 99% of people type in **Roman Urdu** using the English alphabet:
+   > *"Assalam-o-Alaikum bhai, kya haal hai? Husnain kahan hai?"*
+   - If the AI replied in heavy Arabic Urdu script (`وعلیکم السلام، میں ٹھیک ہوں`), it looked unnatural, stiff, and out of place for a modern chat screen.
+2. **When people send voice notes:** If someone leaves an Urdu audio message, hearing a robot pronounce English letters or awkward transliteration would be terrible. They expect to hear **real, authentic, natural spoken Pakistani Urdu** with proper accent, intonation, and warmth!
+
+---
+
+### 3. How We Solved It: The Dual-Modality Bilingual Engine
+We upgraded `getSystemPrompt(isAudioReply)` in [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js) with dynamic context:
+
+```mermaid
+flowchart TD
+    A[Incoming WhatsApp Message] --> B{What format is it?}
+    
+    B -->|Text in Urdu Script| C[Groq LLM Generates ROMAN URDU]
+    C --> D[safeSendText: 'Walaikum Assalam! Main theek hun...']
+    D --> E[💬 Casual Roman Urdu Text Reply]
+    
+    B -->|Voice Note in Urdu| F[Groq Whisper STT Transcribes Audio]
+    F --> G[Groq LLM Generates Spoken Urdu Script]
+    G --> H[Microsoft Edge-TTS / ElevenLabs Charlie]
+    H --> I[🎙️ Natural Spoken Urdu Voice Note]
+    
+    B -->|Text or Audio in English| J[Default English Processing]
+    J --> K[🇬🇧 Clean English Reply]
+```
+
+#### The Rules Programmed into Charlie's Brain:
+1. **Default Language is English:**
+   - English text gets English text replies. English voice notes get English audio replies.
+2. **Urdu Text Messages ➔ Roman Urdu (Urdu in English Letters):**
+   - If a contact texts in Urdu script (e.g. `السلام علیکم کیا حال ہے؟`), the AI replies:
+     > *"Walaikum Assalam! Main theek hun, shukriya. Husnain abhi busy hain, kya main koi madad kar sakta hun?"*
+   - Friendly, warm, natural, and matches how real Pakistani people text on WhatsApp.
+3. **Urdu Voice Notes ➔ Spoken Urdu Audio (Native Opus PTT):**
+   - If a contact sends an Urdu voice note, Whisper Turbo transcribes it, the LLM creates natural spoken Urdu, and Microsoft Edge-TTS (`ur-PK-UzmaNeural` / `ur-PK-AsadNeural`) or ElevenLabs Charlie speaks it into a native WhatsApp voice note.
+4. **Roman Urdu Text Inputs:**
+   - If a user sends Roman Urdu text with English letters (e.g., *"kaise ho"*), the AI replies in English as standard behavior to maintain strict default language consistency.
+
+---
+
+## 📱 What We Built in Stage 7: Native Cross-Platform Mobile & Desktop App (iOS, Android & macOS)
+
+### 1. Why a Standalone Native App?
+Up until now, interacting with the AI Voice Agent required opening a web browser tab (`http://localhost:3000`) or scanning a WhatsApp QR code.
+The user requested: **"now i want to make an application that can be used in and download on mobile ios and andriod and also mac"**.
+
+To achieve this without maintaining three completely separate codebases, we built a modern **React Native + Expo SDK 54 TypeScript application** in the [`VoiceAgentApp/`](file:///c:/voice%20agenty/VoiceAgentApp) directory.
+
+### 2. Complete Application Architecture
+
+```
+VoiceAgentApp/
+├── App.tsx                              # Main navigation & live connection indicator
+├── app.json                             # Native bundle config & hardware permissions
+├── package.json                         # Expo 54, React Native, TypeScript
+└── src/
+    ├── theme.ts                         # Glassmorphic dark theme tokens & color palette
+    ├── api.ts                           # Multi-platform backend connector (iOS, Android, macOS)
+    └── screens/
+        ├── VoiceStudioScreen.tsx        # Real-time microphone recording & latency telemetry
+        ├── CallHistoryScreen.tsx        # Call logs, transcripts & filter cards
+        └── SettingsScreen.tsx           # Server URL tester & component health diagnostics
+```
+
+---
+
+### 3. Detailed Breakdown of App Screens & Features
+
+#### 🎙️ Screen 1: Voice Studio (`VoiceStudioScreen.tsx`)
+- **Pulsing Neon Microphone Button:** A large interactive push-to-talk mic button with smooth scaling animations, glowing radial borders, and active recording indicators.
+- **Dynamic Waveform Visualizer:** Animated visual soundwaves that pulse in real-time while the user is speaking.
+- **Live Latency Telemetry Grid:** Shows real-time millisecond diagnostics straight from the backend:
+  - **Roundtrip TTFA:** Total time to first audio.
+  - **STT (Whisper Turbo):** Voice-to-text latency (~200ms).
+  - **LLM (Groq Llama 3.3):** Time to first token (~80ms).
+  - **TTS (Edge / ElevenLabs):** Speech generation latency (~150ms).
+- **Full Conversational Chat Stream:** Timestamped message bubbles for both user and AI assistant with distinct colors and speech badges.
+- **Hybrid Text Input Bar:** Allows typing messages directly or speaking via microphone.
+
+#### 📞 Screen 2: Call History (`CallHistoryScreen.tsx`)
+- **Real-Time Call Records:** Fetches call logs directly from `/api/calls/history` with pull-to-refresh.
+- **Status Badges:** Color-coded badges indicating call types:
+  - 🔴 `Auto-Rejected` (Incoming WhatsApp calls intercepted by Charlie).
+  - 🟢 `Completed` (Direct phone or voice studio calls).
+  - 🟡 `Forwarded` (Carrier calls diverted from Zong mobile SIM).
+- **Expandable Transcripts:** Tap any call to expand the full turn-by-turn conversation transcript and read the AI-generated post-call summary.
+- **Filter Tabs:** Quickly filter calls by **All**, **Incoming**, or **Auto-Rejected**.
+
+#### ⚙️ Screen 3: Settings & Diagnostics (`SettingsScreen.tsx`)
+- **Smart Backend Auto-Discovery:**
+  - Automatically selects `http://localhost:3000` when running on macOS or iOS Simulator.
+  - Automatically selects `http://10.0.2.2:3000` when running inside the Android Studio Emulator (Android's special loopback IP for host machine).
+  - Accepts custom public tunnel URLs (`https://voice-agent-husnain.loca.lt`) for physical iPhones and Android devices anywhere in the world!
+- **1-Tap Connection Ping:** Tests connection latency to the Node.js server with visual green/red indicator.
+- **Subsystem Health Monitor:** Real-time diagnostics for:
+  - 🧠 **Groq LLM:** Llama 3.3 70B & token streaming.
+  - 👂 **Whisper Turbo:** High-speed multilingual speech-to-text.
+  - 🗣️ **Edge-TTS / ElevenLabs:** Neural voice synthesis engines.
+  - 📞 **Twilio / Telnyx Telephony:** Carrier stream gateway.
+  - 💬 **WhatsApp Baileys Agent:** Connection state and active phone number.
+- **Quick Links:** 1-tap shortcut to launch the WhatsApp QR pairing dashboard (`http://localhost:3005/qr`).
+
+---
+
+### 4. How to Run & Download on iOS, Android & Mac
+
+#### Option A: Instant Testing via Expo Go (No Compilation Needed)
+1. In your terminal:
+   ```bash
+   cd VoiceAgentApp
+   npx expo start
+   ```
+2. **On Android:** Install **Expo Go** from Google Play Store, open it, and scan the QR code displayed in your terminal.
+3. **On iPhone (iOS):** Install **Expo Go** from Apple App Store, open your iPhone Camera, and point it at the QR code.
+4. **On Mac:** Press `w` in the terminal to launch the app instantly in Safari/Chrome, or run with Mac Catalyst!
+
+#### Option B: Standalone Downloadable Native Apps (EAS Build)
+- **Generate Android APK/AAB:**
+  ```bash
+  npx eas build -p android --profile preview
+  ```
+  *(Produces an `.apk` file that you can directly download and install on any Android phone).*
+- **Generate iOS IPA (Apple App Store / TestFlight):**
+  ```bash
+  npx eas build -p ios --profile preview
+  ```
+  *(Produces an installable package for iPhone devices).*
+- **Generate macOS Desktop App:**
+  ```bash
+  npx expo export:web
+  ```
+  *(Or package with Electron / React Native for macOS for a native `.dmg` installer).*
+
+---
+
+## 📚 Key Concepts Dictionary (Updated for Stage 7)
 
 | Term | What It Means in Simple Words |
 | :--- | :--- |
+| **React Native** | A framework created by Meta that allows writing mobile apps in JavaScript/TypeScript that compile directly into real native iOS and Android buttons, views, and animations. |
+| **Expo SDK** | A modern development platform and toolchain built on top of React Native that makes developing, testing, and building mobile apps seamless across iOS, Android, and Web with zero Xcode/Android Studio hassles. |
+| **Cross-Platform** | Software designed to run on multiple different operating systems (iOS, Android, macOS, Windows) using a single unified codebase. |
+| **Roman Urdu** | Writing the Urdu language using the English alphabet (Latin letters) instead of Arabic/Persian script (e.g. *"Aap kaise hain?"* instead of *"آپ کیسے ہیں؟"*). |
+| **Call Auto-Rejection** | Programmatically declining an incoming telephone or VoIP call the instant it rings so the caller is immediately greeted with an AI voice note instead of waiting in silence. |
+| **Loopback IP (`10.0.2.2`)** | The special virtual IP address used by Android emulators to communicate directly with `localhost` on your host PC computer. |
+| **Dynamic System Prompt Modality** | Changing the instructions given to the AI LLM based on whether the output will be displayed as written text or synthesized into spoken audio. |
+| **EAS Build (Expo Application Services)** | Cloud build service that packages React Native projects into native `.apk` files for Android and `.ipa` files for Apple iPhones without needing a Mac. |
+| **Mac Catalyst** | Apple's technology that allows iOS and iPadOS applications to run natively on macOS with full desktop windowing and keyboard shortcuts. |
+| **Full-Duplex Telemetry** | Measuring and displaying the exact time taken by each component of an AI pipeline (Ears -> Brain -> Mouth) in real time during live conversation. |
 | **WhatsApp Calling API** | Meta's official cloud feature allowing software to receive and place live audio calls over WhatsApp via WebRTC or SIP. |
 | **WebRTC (Web Real-Time Communication)** | An open standard and protocol that enables real-time peer-to-peer audio, video, and data transmission with sub-second latency. |
 | **SDP (Session Description Protocol)** | The standardized text format used by WebRTC endpoints during a "handshake" to negotiate audio formats, encryption, and network addresses. |
@@ -1549,7 +1715,6 @@ If you do not want to wait for Meta Business verification or don't want to dedic
 | **Non-Intrusive Call Preservation** | Allowing incoming voice calls to ring untouched on the user's personal device rather than programmatically declining or interrupting them with automated bots. |
 | **Companion WebSocket Protocol** | A secondary client protocol (like WhatsApp Web) designed strictly for messaging synchronization across linked devices, without access to primary carrier/VoIP audio streams. |
 
-
 ---
 
 ## 🚀 What We Are Ready to Build Next (Future Roadmap)
@@ -1559,9 +1724,14 @@ If you do not want to wait for Meta Business verification or don't want to dedic
    - Clean text replies to text messages, Charlie voice notes to audio messages, and ringing calls preserved.
 3. **Stage 6.5 WhatsApp Business Calling Architecture & Cost Blueprint (Completed! ✅):**
    - Inbound free calling breakdown ($0.00/min Meta fee), WebRTC/SIP SDP handshake architecture, and 1-tap live call bridge.
-4. **Meta Cloud API WebRTC / SIP Calling Production Deployment:**
+4. **Stage 6.6 Auto-Reject Calls & Roman Urdu / Spoken Urdu Dual Modality (Completed! ✅):**
+   - Instant `sock.rejectCall()`, automated Charlie voice note greeting + live call link, Roman Urdu for text chats, and spoken Urdu for audio notes.
+5. **Stage 7 Native Cross-Platform Mobile & Desktop App for iOS, Android & macOS (Completed! ✅):**
+   - React Native Expo application (`VoiceAgentApp/`) with Voice Studio, Call History, Settings, and real-time telemetry.
+6. **Meta Cloud API WebRTC / SIP Calling Production Deployment:**
    - Link production WABA credentials and deploy WebRTC RTP audio bridge for real-time live WhatsApp VoIP phone calls.
-5. **Client-Side Neural VAD (Silero VAD):**
-   - Pure machine-learning voice activity detection running directly in the browser with zero buttons.
-6. **Custom Character Personas & Prompt Presets:**
+7. **Client-Side Neural VAD (Silero VAD):**
+   - Pure machine-learning voice activity detection running directly in the browser and mobile app with zero buttons.
+8. **Custom Character Personas & Prompt Presets:**
    - Switchable agent personalities: Hotel Concierge, Tech Support Specialist, Medical Clinic Receptionist, and friendly assistant.
+

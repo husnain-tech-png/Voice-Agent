@@ -1,13 +1,10 @@
 {
-  "state": "connected",
-  "connected": true,
+  "state": "disconnected",
+  "connected": false,
   "botUser": "923154483615:45@s.whatsapp.net",
   "userName": "husnain bhatti",
-  "timestamp": "2026-09-30T14:18:38.952Z",
+  "timestamp": "2026-09-30T15:24:51.716Z",
   "conversationsCount": 0,
-  "user": {
-    "id": "923154483615:45@s.whatsapp.net",
-    "name": "husnain bhatti",
-    "lid": "141081236750502:45@lid"
-  }
+  "statusCode": 401,
+  "shouldReconnect": false
 }

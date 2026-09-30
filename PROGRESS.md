@@ -6,9 +6,10 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 ---
 
 ## 🚦 Current Status Summary
-- **Current Phase:** ✅ **Stage 6.5 WhatsApp Business Calling Architecture & Cost Blueprint (Inbound Free Calling, WebRTC/SIP, & Modality-Matching)**
+- **Current Phase:** ✅ **Stage 7 Native Cross-Platform Mobile & Desktop App (iOS, Android & macOS) & Stage 6.6 Auto-Reject Calls with Urdu-English Dual Modality**
 - **Protocols & Gateways:** 
-  - 📲 **Personal WhatsApp AI Voice Agent (Stage 6.4 Active - Port 3005):** Node.js Baileys service in [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), modality-matching response routing (text messages get clean text responses, voice notes get Charlie's ElevenLabs voice notes), non-intrusive call preservation (no forced call rejection or chat deflection spam; calls ring phone normally), QR pairing dashboard on `http://localhost:3005/qr`, and status API (`GET /status`).
+  - 📲 **Native Cross-Platform App (Stage 7 Active):** React Native + Expo SDK 54 TypeScript application in [`VoiceAgentApp/`](file:///c:/voice%20agenty/VoiceAgentApp) with dark glassmorphic design system, Live Voice Studio (mic recording + latency telemetry), Call History with expandable transcripts, and Settings with health diagnostics and auto-server discovery (iOS, Android, macOS).
+  - 💬 **Personal WhatsApp AI Voice Agent (Stage 6.6 Active - Port 3005):** Node.js Baileys service in [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), instant call auto-rejection (`sock.rejectCall()`) + deflection greeting voice note, bilingual dual-modality (Urdu text ➔ Roman Urdu, Urdu voice ➔ Spoken Urdu audio note), QR pairing on `http://localhost:3005/qr`, and status API (`GET /status`).
   - 🤖 **WhatsApp Cloud API Voice Agent (Stage 6 Active - Port 8000):** FastAPI server in [`whatsapp-bot/main.py`](file:///c:/voice%20agenty/whatsapp-bot/main.py), Meta Cloud API Webhook (`POST /webhook`, verification `GET /webhook`), Health Diagnostics (`GET /health`), Interactive Swagger Docs (`/docs`), Background Task Audio Pipeline, and Automated Test Suite ([`whatsapp-bot/test-whatsapp.ps1`](file:///c:/voice%20agenty/whatsapp-bot/test-whatsapp.ps1))
   - 🌐 **Telnyx CPaaS & TeXML (Active & Primary):** Full-duplex μ-law (8000Hz) WebSocket on `/telnyx/media-stream`, TeXML Webhook on `/telnyx/incoming`, TeXML App ID `3055170547735332106`, Status on `/api/telnyx/status`, Auto-Sync on `/api/telnyx/sync`
   - 📱 **Mobile Call Forwarding & History:** REST endpoints on `/api/forwarding/setup`, `/api/calls/history`, `/api/calls/:callSid`, `/api/calls/test-summary-sms`
@@ -20,7 +21,7 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
   - WhatsApp Voice Notes: ✅ Groq Whisper Multilingual (`whisper-large-v3-turbo`) with auto-detecting Urdu & English speech (~200ms)
 - **Brain (Thinking):**
   - Web & Telephony: ✅ Groq LLM (`openai/gpt-oss-120b`) with **live token streaming (`stream: true`)** + Post-Call Summary generation
-  - WhatsApp Voice Agent: ✅ Groq LLM with authentic, polite conversational Pakistani Urdu & English intelligence
+  - WhatsApp Voice Agent: ✅ Groq LLM with authentic, polite conversational Pakistani Urdu & English intelligence (Roman Urdu for text, spoken Urdu script for voice)
 - **Mouth (Speaking):**
   - Web & Telephony: ✅ **ElevenLabs Flash v2.5 (`eleven_flash_v2_5`)** with Charlie male voice (`IKne3meq5aSn9XLyUdCD`)
   - WhatsApp Voice Notes: ✅ **ElevenLabs Charlie (`IKne3meq5aSn9XLyUdCD`) via `eleven_multilingual_v2`** with zero-cost male fallback (`ur-PK-AsadNeural` for Urdu, `en-US-GuyNeural` for English)
@@ -30,6 +31,7 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 - **Call History Persistence:** ✅ In-memory cache + automatic disk backup to `call-history.json`
 - **Default Voice:** Charlie (`IKne3meq5aSn9XLyUdCD` - Casual Friendly Male Voice)
 - **API Status:**
+  - Native Mobile App: ✅ Ready (`VoiceAgentApp/` built with Expo SDK 54, TypeScript, iOS/Android/macOS support)
   - WhatsApp Voice Bot: ✅ Initialized & Verified (`whatsapp-bot/main.py` on port 8000, Meta Webhook `/webhook`, `/health`, `/docs`)
   - Telnyx CPaaS: ✅ Connected & Verified (Configured in `.env`, Balance `$5.00`, TeXML App `3055170547735332106`)
   - Forwarding & Summaries: ✅ Active (`/api/forwarding/setup`, `/api/calls/history`, `/api/calls/test-summary-sms`)
@@ -305,57 +307,140 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 - [x] **Updated Dashboard Feature List (`http://localhost:3005/qr`)**:
   - Web dashboard now clearly reflects: *"Calls ring normally (no auto-hangup)"*, *"Processing voice notes with AI voice"*, *"Replying to text messages with text"*.
 
+### Stage 6.5: WhatsApp Business Calling Architecture & Cost Analysis
+- [x] **Official Meta Calling API Architecture & Feasibility Study**:
+  - Detailed architectural blueprint for WebRTC / SIP SDP signaling handshake and audio bridge connecting Meta Cloud API v20+ Calling API to Whisper STT, Groq LLM, and Edge-TTS / ElevenLabs.
+  - Documented $0.00 Meta platform fee for user-initiated inbound voice calls, per-minute outbound pricing, and phone number onboarding requirements.
+  - Comprehensive cost matrix comparing inbound ($0.00/min) vs outbound rates ($0.005–$0.03/min) and zero-cost local infrastructure stack.
+
+### Stage 6.6: Auto-Reject Calls & Enhanced Urdu-English Dual Modality (Roman Urdu Text / Spoken Urdu Voice Notes)
+- [x] **Instant WhatsApp Call Auto-Rejection (`sock.rejectCall`)**:
+  - Intercepts incoming WhatsApp voice and video calls (`status === "offer"`) on personal WhatsApp numbers.
+  - Immediately rejects the call with `await sock.rejectCall(call.id, call.from)`, stopping prolonged ringing.
+  - Instantly triggers `handleCallInterception`: delivers a polite spoken voice note from Charlie explaining that Husnain is unavailable, accompanied by a companion text message and 1-tap live call studio URL.
+  - Logs call in `call-history.json` as `"Incoming WhatsApp Call (Auto-Rejected)"`.
+- [x] **Bilingual Dual-Modality Conversational Routing (`getSystemPrompt(isAudio)` in `whatsapp-personal.js`)**:
+  - **Urdu Text Messages ➔ Roman Urdu Text Reply**: When a contact sends an Urdu message in Urdu script (`/[\u0600-\u06FF]/`), Charlie replies in authentic Pakistani Urdu written using **English letters (Roman Urdu)**. Example: *"Walaikum Assalam! Main theek hun, shukriya. Husnain abhi busy hain..."*.
+  - **Urdu Voice Notes ➔ Spoken Urdu Audio Reply**: When a contact sends an Urdu voice note, Whisper Turbo transcribes it, Groq LLM generates spoken Urdu script, and Edge-TTS (`ur-PK-UzmaNeural` / `ur-PK-AsadNeural`) or ElevenLabs Charlie speaks it into a native Opus PTT voice note.
+  - **Strict English Default**: When users write or speak in English, all replies remain in articulate, fluent English. Roman Urdu text inputs from callers receive English responses to preserve the default language rule without ambiguity.
+  - **Language-Aware Error Handlers & Fallbacks**: Customized fallbacks in both Roman Urdu (for text) and spoken Urdu script (for audio).
+
+### Stage 7: Native Cross-Platform Mobile & Desktop App (VoiceAgentApp — iOS, Android & macOS)
+- [x] **React Native Expo SDK 54 TypeScript Project Setup (`VoiceAgentApp/`)**:
+  - Initialized standalone cross-platform mobile application in [`VoiceAgentApp/`](file:///c:/voice%20agenty/VoiceAgentApp).
+  - Configured for iOS, Android, and macOS/Web support.
+  - Tailored design system tokens in [`src/theme.ts`](file:///c:/voice%20agenty/VoiceAgentApp/src/theme.ts) mirroring the Voice Studio's dark glassmorphic UI (`#020617` deep background, `#0f172a` base, glowing gradient accents `#3b82f6` to `#8b5cf6`).
+- [x] **Adaptive Multi-Platform API Service Layer ([`src/api.ts`](file:///c:/voice%20agenty/VoiceAgentApp/src/api.ts))**:
+  - Platform-adaptive URL discovery: automatically detects `localhost:3000` (macOS/Web/iOS Simulator), `10.0.2.2:3000` (Android emulator), and configurable LAN/tunnel URLs for physical devices.
+  - Full client methods for `/api/health`, `/api/chat`, `/api/transcribe`, `/api/tts`, `/api/voice-chat`, `/api/calls/history`, and WhatsApp agent status (`http://localhost:3005/status`).
+- [x] **Live Voice Studio Screen ([`src/screens/VoiceStudioScreen.tsx`](file:///c:/voice%20agenty/VoiceAgentApp/src/screens/VoiceStudioScreen.tsx))**:
+  - Interactive pulsing neon push-to-talk microphone button with ripple animations.
+  - Dynamic audio waveform animation.
+  - Full-duplex conversational chat feed with sender avatars and timestamps.
+  - Real-time **Latency Telemetry Grid** displaying STT latency, LLM TTFT, TTS latency, and roundtrip TTFA in milliseconds.
+  - Text input bar for hybrid text/voice interaction.
+- [x] **Call History Screen ([`src/screens/CallHistoryScreen.tsx`](file:///c:/voice%20agenty/VoiceAgentApp/src/screens/CallHistoryScreen.tsx))**:
+  - Live call logs with caller number, timestamp, duration, and status badges (`Auto-Rejected`, `Completed`, `Forwarded`).
+  - Expandable turn-by-turn conversation transcripts and AI post-call summaries.
+  - Filter tabs (All, Incoming, Auto-Rejected) and pull-to-refresh.
+- [x] **Settings & Diagnostics Screen ([`src/screens/SettingsScreen.tsx`](file:///c:/voice%20agenty/VoiceAgentApp/src/screens/SettingsScreen.tsx))**:
+  - Server URL configuration with 1-tap live connection ping and latency test.
+  - Subsystem health diagnostic monitors (Whisper Turbo STT, Groq Llama 3.3 LLM, Edge-TTS/ElevenLabs, Twilio/Telnyx Telephony, Baileys WhatsApp Agent).
+  - Quick action shortcuts to launch the WhatsApp QR pairing dashboard.
+- [x] **Tab Navigation & Native App Config ([`App.tsx`](file:///c:/voice%20agenty/VoiceAgentApp/App.tsx) & [`app.json`](file:///c:/voice%20agenty/VoiceAgentApp/app.json))**:
+  - Tab navigator with icons and status header showing real-time backend connection pill (`Connected 🟢` / `Offline 🔴`).
+  - Bundle ID `com.voiceagent.app` with native microphone permissions (`NSMicrophoneUsageDescription`, `android.permission.RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`).
+
 
 ---
 
 ## 🏗️ Architecture & Data Flow
 
-### Stage 6.4: WhatsApp Modality-Aware Interaction & Call Flow
+### Stage 6.6: WhatsApp Auto-Reject Calling & Dual-Modality Conversational Pipeline
 ```mermaid
 flowchart TD
     A[Incoming WhatsApp Interaction] --> B{Interaction Modality?}
     
-    B -->|Text Message| C[Conversation / ExtendedTextMessage]
-    C --> D[Groq LLM Reasoning with Memory]
-    D --> E[safeSendText - Quoted Reply]
-    E --> F[📱 User Receives Text Message Reply]
+    B -->|Text in Urdu Script| C[Groq LLM: Roman Urdu Mode]
+    C --> D[safeSendText: Urdu written in English letters]
+    D --> E[💬 'Walaikum Assalam! Main theek hun, shukriya...']
     
-    B -->|Voice Note| G[Audio Message .ogg Opus]
-    G --> H[Groq Whisper STT Transcribe]
-    H --> I[Groq LLM Reasoning with Memory]
-    I --> J[ElevenLabs Charlie TTS / Edge Fallback]
-    J --> K[FFmpeg Transcode: 48kHz mono Opus OGG]
-    K --> L[sock.sendMessage ptt: true]
-    L --> M[🎧 User Receives Spoken Voice Note Reply]
+    B -->|Text in English| F[Groq LLM: English Mode]
+    F --> G[safeSendText: English text]
+    G --> H[💬 English Text Response]
     
-    B -->|WhatsApp Voice Call| N[Call Event: status == offer]
-    N --> O[Log Interaction to call-history.json]
-    O --> P[🚫 NO sock.rejectCall - Never Terminate Call]
-    P --> Q[🚫 NO Deflection Voice Note in Chat]
-    Q --> R[📲 User Phone Rings Normally to Answer]
+    B -->|Voice Note in Urdu| I[Groq Whisper Turbo STT]
+    I --> J[Groq LLM: Spoken Urdu Mode]
+    J --> K[Edge-TTS ur-PK-UzmaNeural / ElevenLabs Charlie]
+    K --> L[FFmpeg: 48kHz mono Opus OGG]
+    L --> M[🎙️ Natural Spoken Urdu PTT Voice Note]
+    
+    B -->|Voice Note in English| N[Groq Whisper Turbo STT]
+    N --> O[Groq LLM: English Mode]
+    O --> P[ElevenLabs Charlie / Edge en-US-GuyNeural]
+    P --> Q[🎙️ Fluent English PTT Voice Note]
+    
+    B -->|Incoming WhatsApp Call| R[Call Event: status == offer]
+    R --> S[⚡ sock.rejectCall - Instant Hangup]
+    S --> T[🎙️ Dispatch Charlie Voice Note Greeting]
+    T --> U[🔗 Send 1-Tap Live Studio URL]
+    U --> V[📝 Log 'Incoming WhatsApp Call (Auto-Rejected)']
 ```
 
 ```
 📱 Caller / Sender on WhatsApp
           │
-          ├───► 1. Sends Text ("Salam, meeting kab hai?")
+          ├───► 1. Texts in Urdu Script ("السلام علیکم")
           │        │
           │        ▼
-          │     [Groq LLM Reasoning] ──► [safeSendText] ──► 💬 Replies in Text
+          │     [Groq LLM Roman Urdu Prompt] ──► [safeSendText] ──► 💬 Roman Urdu ("Walaikum Assalam! Main theek hun...")
           │
-          ├───► 2. Sends Voice Note (.ogg Opus)
+          ├───► 2. Texts in English ("Hello, where is Husnain?")
           │        │
           │        ▼
-          │     [Whisper STT] ──► [Groq LLM] ──► [ElevenLabs Charlie TTS] ──► 🎙️ Replies with Voice Note (PTT)
+          │     [Groq LLM English Prompt] ──► [safeSendText] ──► 💬 English Text ("Hello! Husnain is currently busy...")
           │
-          └───► 3. Initiates WhatsApp Audio Call
+          ├───► 3. Sends Voice Note (.ogg Opus)
+          │        │
+          │        ▼
+          │     [Whisper STT] ──► [Groq LLM] ──► [Edge-TTS / ElevenLabs] ──► 🎙️ Spoken Voice Note (Urdu or English)
+          │
+          └───► 4. Voice Calls on WhatsApp
                    │
                    ▼
                 [sock.ev.on('call')]
                    │
-                   ├─► Log to call-history.json
-                   ├─► 🚫 DO NOT rejectCall (No auto-hangup)
-                   └─► 📞 Phone rings normally — Owner can answer!
+                   ├─► ⚡ sock.rejectCall(call.id, call.from) [Immediate hangup]
+                   ├─► 🎙️ Sends Charlie Voice Note Greeting
+                   ├─► 🔗 Sends 1-Tap Live AI WebRTC Link
+                   └─► 📝 Logs to call-history.json as Auto-Rejected
+```
+
+### Stage 7: Native Cross-Platform Client App Architecture (VoiceAgentApp)
+```
+┌────────────────────────────────────────────────────────┐
+│        VoiceAgentApp (React Native Expo SDK 54)        │
+│       Multi-Platform Client (iOS, Android, macOS)      │
+├───────────────────┬───────────────────┬────────────────┤
+│ 🎙️ Voice Studio   │ 📞 Call History   │ ⚙️ Settings    │
+│  - Live Mic Record│  - Call Log Sync  │  - URL Config  │
+│  - Neon Waveform  │  - Full Transcript│  - Ping Latency│
+│  - TTFA Telemetry │  - Status Badges  │  - Health Grid │
+│  - Chat Bubbles   │  - Pull-to-Refresh│  - WhatsApp QR │
+└─────────┬─────────┴─────────┬─────────┴────────┬───────┘
+          │                   │                  │
+          ▼                   ▼                  ▼
+┌────────────────────────────────────────────────────────┐
+│            Adaptive API Layer (src/api.ts)             │
+│   iOS / macOS: localhost:3000 | Android: 10.0.2.2:3000 │
+│   Physical Mobile: https://voice-agent-husnain.loca.lt │
+└─────────────────────────────┬──────────────────────────┘
+                              │ HTTP / REST / WebSockets
+                              ▼
+┌────────────────────────────────────────────────────────┐
+│            Backend Server (server.js - :3000)          │
+│   Whisper STT | Groq Llama 3.3 | Edge-TTS / ElevenLabs │
+└────────────────────────────────────────────────────────┘
 ```
 
 ### Stage 6: WhatsApp Voice Agent Pipeline Flow (Voice Note to Voice Note)
@@ -502,7 +587,7 @@ flowchart TD
 3. **Interactive Swagger API Docs**:
    - Open **[http://localhost:8000/docs](http://localhost:8000/docs)** to test and inspect all endpoints.
 
-### Option D: Personal WhatsApp AI Voice Agent (Stage 6.1 — Port 3005)
+### Option D: Personal WhatsApp AI Voice Agent (Stage 6.6 — Port 3005)
 1. **Start the Personal WhatsApp Service**:
    ```bash
    npm run whatsapp
@@ -516,11 +601,32 @@ flowchart TD
 3. **Verify Connection & Health**:
    - Check status via JSON: `http://localhost:3005/status`
    - Shows connection state (`connected`), paired user name, and phone number.
-4. **Live Verification**:
-   - **Incoming Calls:** Have any WhatsApp contact call the linked number. The agent silences the ring and delivers an AI voice note explaining the user is busy and asking for a voice note.
-   - **Voice Notes:** Send a WhatsApp voice note (PTT). The agent transcribes it with Groq Whisper and sends an intelligent spoken voice note back using Microsoft Edge-TTS!
-   - **Text Messages:** Send text messages — the agent replies with voice and text.
+4. **Live Verification (Stage 6.6 Dual Modality & Auto-Reject)**:
+   - **Incoming Calls:** Have any WhatsApp contact call the linked number. The bot **instantly rejects the call** via `sock.rejectCall()`, and sends an AI voice note explaining Husnain is unavailable + 1-tap live call studio URL.
+   - **Urdu Text Messages:** Send a text in Urdu script (`السلام علیکم`). The agent replies in **Roman Urdu** (`Walaikum Assalam! Main theek hun...`).
+   - **Urdu Voice Notes:** Send an Urdu voice note. The agent transcribes it and replies with an authentic **spoken Urdu voice note** synthesized via Microsoft Edge-TTS / ElevenLabs Charlie!
+   - **English Messages:** English text messages and English voice notes get English text and voice replies.
    - **Disconnect / Switch Numbers:** Visit `http://localhost:3005/logout` to disconnect and pair a different phone number.
+
+### Option E: Native Cross-Platform Mobile & Desktop App (Stage 7 — iOS, Android & macOS)
+1. **Start the Expo Development Server**:
+   ```bash
+   cd VoiceAgentApp
+   npx expo start
+   ```
+2. **Run on Android**:
+   - Open **Expo Go** from Google Play Store on your Android phone.
+   - Scan the terminal QR code to load the app directly over WiFi.
+   - Or run on Android Studio Emulator: press `a` in terminal.
+3. **Run on iPhone (iOS)**:
+   - Open the **Camera app** on iPhone.
+   - Scan the terminal QR code and open in **Expo Go**.
+   - Or run on iOS Simulator (macOS): press `i` in terminal.
+4. **Run on macOS / Web**:
+   - Press `w` in terminal to launch the web client at `http://localhost:8081`.
+5. **Generate Standalone Downloadable Installers (EAS Build)**:
+   - Android APK: `npx eas build -p android --profile preview`
+   - iOS IPA: `npx eas build -p ios --profile preview`
 
 ---
 
@@ -587,12 +693,18 @@ PERSONAL_PHONE_NUMBER=+923154483615
   - Complete analysis of Meta WhatsApp Business Calling API (inbound calls are 100% FREE from Meta, outbound calls billed per minute).
   - Designed WebRTC / SIP SDP signaling handshake and audio bridge architecture connecting to Whisper STT, Groq LLM, and Edge-TTS / ElevenLabs.
   - Documented easy step-by-step Meta Developer setup, phone number migration rules, and 1-tap live call link alternative in [`myprogress.md`](file:///c:/voice%20agenty/myprogress.md).
+- [x] **Stage 6.6: Auto-Reject Calls & Roman Urdu / Spoken Urdu Dual Modality**:
+  - Instant call auto-rejection via `sock.rejectCall()`, automated deflection voice note greeting + live call link.
+  - Roman Urdu text responses for Urdu script text messages; spoken Urdu Opus voice notes for Urdu audio messages. English remains default.
+- [x] **Stage 7: Native Cross-Platform Mobile & Desktop App (iOS, Android & macOS)**:
+  - React Native Expo SDK 54 TypeScript application in [`VoiceAgentApp/`](file:///c:/voice%20agenty/VoiceAgentApp).
+  - Voice Studio screen (mic recording, audio waveform, latency telemetry grid), Call History screen (expandable transcripts), Settings screen (adaptive backend URL & health monitoring).
 - [ ] **Meta Cloud API Permanent System User Token Configuration**:
   - Add production `WHATSAPP_TOKEN` and `PHONE_NUMBER_ID` in `whatsapp-bot/.env` to link to user's registered WhatsApp business number.
 - [ ] **Meta Cloud API WebRTC Calling Media Bridge**:
   - Implement full-duplex WebRTC audio connection using Pion or Mediasoup for direct in-app WhatsApp live voice calling.
 - [ ] **Client-Side Neural VAD (Silero VAD)**:
-  - High-accuracy ML voice detection in the browser to eliminate button pressing entirely.
+  - High-accuracy ML voice detection in the browser and mobile app to eliminate button pressing entirely.
 - [ ] **Custom Character Personas & Prompt Presets**:
   - Switchable personas: Hotel Concierge, Tech Support Specialist, Medical Receptionist, Catbot.
 
