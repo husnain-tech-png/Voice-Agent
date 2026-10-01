@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Voice Agent — Stage 5: Mobile Setup & Call Forwarding</title>
+  <title>AI Voice Agent — Stage 8: Neural VAD (Hands-Free)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -777,6 +777,128 @@
       padding: 2px 8px;
       border-radius: 9999px;
     }
+
+    /* ===== Stage 8: Neural VAD Styles ===== */
+    .vad-listening-banner {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(56, 189, 248, 0.08) 100%);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 10px;
+      padding: 8px 14px;
+      margin-bottom: 8px;
+      font-size: 0.78rem;
+      color: #34d399;
+      font-weight: 600;
+      animation: vad-pulse-border 2.5s ease-in-out infinite;
+    }
+
+    @keyframes vad-pulse-border {
+      0%, 100% { border-color: rgba(16, 185, 129, 0.25); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+      50% { border-color: rgba(16, 185, 129, 0.55); box-shadow: 0 0 12px 0 rgba(16, 185, 129, 0.15); }
+    }
+
+    .vad-neural-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 18px;
+    }
+
+    .vad-neural-bar {
+      width: 3px;
+      background: #34d399;
+      border-radius: 2px;
+      transition: height 0.12s ease;
+    }
+
+    .vad-neural-bar:nth-child(1) { animation: vad-bar-anim 1.2s 0.0s ease-in-out infinite; }
+    .vad-neural-bar:nth-child(2) { animation: vad-bar-anim 1.2s 0.15s ease-in-out infinite; }
+    .vad-neural-bar:nth-child(3) { animation: vad-bar-anim 1.2s 0.3s ease-in-out infinite; }
+    .vad-neural-bar:nth-child(4) { animation: vad-bar-anim 1.2s 0.45s ease-in-out infinite; }
+    .vad-neural-bar:nth-child(5) { animation: vad-bar-anim 1.2s 0.6s ease-in-out infinite; }
+    .vad-neural-bar:nth-child(6) { animation: vad-bar-anim 1.2s 0.75s ease-in-out infinite; }
+
+    @keyframes vad-bar-anim {
+      0%, 100% { height: 4px; opacity: 0.4; }
+      50% { height: 16px; opacity: 1; }
+    }
+
+    .vad-speech-detected .vad-neural-bar {
+      background: #38bdf8;
+      animation-duration: 0.4s !important;
+    }
+
+    .vad-speech-detected {
+      border-color: rgba(56, 189, 248, 0.5) !important;
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(192, 132, 252, 0.08) 100%) !important;
+      color: #38bdf8 !important;
+    }
+
+    .btn-mic.vad-active {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.3) 0%, rgba(56, 189, 248, 0.2) 100%);
+      border-color: rgba(16, 185, 129, 0.5);
+      animation: vad-mic-glow 2s ease-in-out infinite;
+      position: relative;
+    }
+
+    .btn-mic.vad-active::after {
+      content: '';
+      position: absolute;
+      top: -3px;
+      right: -3px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #34d399;
+      border: 2px solid rgba(2, 6, 23, 0.8);
+      animation: vad-dot-pulse 1.5s ease-in-out infinite;
+    }
+
+    .btn-mic.vad-speech::after {
+      background: #38bdf8 !important;
+    }
+
+    @keyframes vad-mic-glow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+      50% { box-shadow: 0 0 15px 3px rgba(16, 185, 129, 0.25); }
+    }
+
+    @keyframes vad-dot-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.3); opacity: 0.7; }
+    }
+
+    .vad-confidence-meter {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      color: #94a3b8;
+    }
+
+    .vad-confidence-bar {
+      width: 60px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .vad-confidence-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #34d399, #38bdf8);
+      border-radius: 2px;
+      transition: width 0.1s ease;
+    }
+
+    .badge-teal {
+      background: rgba(20, 184, 166, 0.2);
+      border-color: rgba(20, 184, 166, 0.35);
+      color: #2dd4bf;
+    }
   </style>
 </head>
 <body>
@@ -790,6 +912,7 @@
         <span id="sttBadge" class="badge badge-blue">Whisper Turbo</span>
         <span id="ttsBadge" class="badge badge-purple">Mouth: Initializing</span>
         <span id="phoneBadge" class="badge badge-purple">📞 Phone: Checking...</span>
+        <span id="vadBadge" class="badge badge-purple">🧠 VAD: Off</span>
         <span id="waBadge" class="badge badge-green" style="cursor:pointer;" onclick="window.open('http://localhost:3005/qr', '_blank')">💬 WhatsApp: Checking...</span>
       </div>
     </div>
@@ -837,6 +960,27 @@
       </div>
     </div>
 
+    <!-- Neural VAD Listening Banner (Stage 8) -->
+    <div class="vad-listening-banner" id="vadListeningBanner">
+      <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+        <div class="vad-neural-bars" id="vadNeuralBars">
+          <div class="vad-neural-bar" style="height:4px;"></div>
+          <div class="vad-neural-bar" style="height:6px;"></div>
+          <div class="vad-neural-bar" style="height:4px;"></div>
+          <div class="vad-neural-bar" style="height:8px;"></div>
+          <div class="vad-neural-bar" style="height:5px;"></div>
+          <div class="vad-neural-bar" style="height:4px;"></div>
+        </div>
+        <span id="vadStatusLabel">🧠 <strong>Neural VAD Listening</strong> — Silero v5 (ONNX)</span>
+      </div>
+      <div class="vad-confidence-meter">
+        <span id="vadConfidenceText">0%</span>
+        <div class="vad-confidence-bar">
+          <div class="vad-confidence-fill" id="vadConfidenceFill"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Active Recording Banner -->
     <div class="recording-banner" id="recordingBanner">
       <div style="display: flex; align-items: center; gap: 8px;">
@@ -876,7 +1020,8 @@
         • <strong>Default Language:</strong> English (Speaks in natural male Charlie voice).<br>
         • <strong>Automatic Urdu Detection:</strong> If you speak or write in Urdu (یا اردو میں بات کریں), the AI dynamically switches and replies in authentic conversational Pakistani Urdu!<br>
         • <strong>Full-Duplex WebSockets:</strong> Live bidirectional audio streaming on <code>/ws/voice</code> (&lt;500ms latency).<br>
-        • <strong>Live Barge-In:</strong> Speak or click <em>Interrupt</em> to cut the agent off instantly at any time!
+        • <strong>Live Barge-In:</strong> Speak or click <em>Interrupt</em> to cut the agent off instantly at any time!<br>
+        • <strong>🧠 Neural VAD (NEW!):</strong> Toggle <em>Neural VAD (Hands-Free)</em> below to enable Silero AI voice detection — no button press needed! The AI automatically detects when you start and stop speaking.
       </div>
     </div>
 
@@ -917,6 +1062,11 @@
         <label class="toggle-label">
           <input type="checkbox" id="ttsToggle" checked />
           <span>🔊 Voice Reply (TTS)</span>
+        </label>
+
+        <label class="toggle-label" title="Silero Neural VAD — Hands-free voice detection (no button press needed)">
+          <input type="checkbox" id="vadToggle" />
+          <span>🧠 Neural VAD (Hands-Free)</span>
         </label>
       </div>
     </div>
@@ -1292,6 +1442,10 @@
     </div>
   </div>
 
+  <!-- Stage 8: Silero Neural VAD Dependencies (ONNX Runtime Web + @ricky0123/vad-web) -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.31/dist/bundle.min.js"></script>
+
   <script>
     // Elements
     const chatBox = document.getElementById('chatBox');
@@ -1306,6 +1460,13 @@
     const interruptBtn = document.getElementById('interruptBtn');
     const autoSendToggle = document.getElementById('autoSendToggle');
     const ttsToggle = document.getElementById('ttsToggle');
+    const vadToggle = document.getElementById('vadToggle');
+    const vadBadge = document.getElementById('vadBadge');
+    const vadListeningBanner = document.getElementById('vadListeningBanner');
+    const vadNeuralBars = document.getElementById('vadNeuralBars');
+    const vadStatusLabel = document.getElementById('vadStatusLabel');
+    const vadConfidenceText = document.getElementById('vadConfidenceText');
+    const vadConfidenceFill = document.getElementById('vadConfidenceFill');
     const voiceSelect = document.getElementById('voiceSelect');
     const wsBadge = document.getElementById('wsBadge');
     const aiBadge = document.getElementById('aiBadge');
@@ -1388,6 +1549,13 @@
     let elevenlabsAvailable = false;
     let nextExpectedChunk = 0;
     let chunkAudioBufferMap = new Map();
+
+    // Stage 8: Neural VAD State
+    let vadInstance = null;
+    let vadActive = false;
+    let vadSpeechActive = false;
+    let vadLoading = false;
+    let vadDebounceTimer = null;
 
     // Initialize Web Audio Context
     function getAudioContext() {
@@ -1942,11 +2110,234 @@
     }
 
     micBtn.addEventListener('click', () => {
+      // If VAD is active, mic button toggles VAD off instead
+      if (vadActive) {
+        vadToggle.checked = false;
+        toggleVad(false);
+        return;
+      }
       if (!isRecording) {
         startRecording();
       } else {
         stopRecording();
       }
+    });
+
+    // =====================================================
+    // Stage 8: Neural VAD (Silero) — Hands-Free Detection
+    // =====================================================
+
+    // Convert Float32Array (16kHz) to WAV Blob for server-side Whisper STT
+    function float32ToWavBlob(float32Arr, sampleRate = 16000) {
+      const numChannels = 1;
+      const bitsPerSample = 16;
+      const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+      const blockAlign = numChannels * (bitsPerSample / 8);
+      const dataLength = float32Arr.length * (bitsPerSample / 8);
+      const headerLength = 44;
+      const totalLength = headerLength + dataLength;
+
+      const buffer = new ArrayBuffer(totalLength);
+      const view = new DataView(buffer);
+
+      // RIFF header
+      writeString(view, 0, 'RIFF');
+      view.setUint32(4, totalLength - 8, true);
+      writeString(view, 8, 'WAVE');
+
+      // fmt chunk
+      writeString(view, 12, 'fmt ');
+      view.setUint32(16, 16, true);           // chunk size
+      view.setUint16(20, 1, true);            // PCM format
+      view.setUint16(22, numChannels, true);  // mono
+      view.setUint32(24, sampleRate, true);   // sample rate
+      view.setUint32(28, byteRate, true);     // byte rate
+      view.setUint16(32, blockAlign, true);   // block align
+      view.setUint16(34, bitsPerSample, true);
+
+      // data chunk
+      writeString(view, 36, 'data');
+      view.setUint32(40, dataLength, true);
+
+      // Convert Float32 samples (-1.0 to 1.0) to Int16 PCM
+      let offset = 44;
+      for (let i = 0; i < float32Arr.length; i++) {
+        let s = Math.max(-1, Math.min(1, float32Arr[i]));
+        s = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        view.setInt16(offset, s, true);
+        offset += 2;
+      }
+
+      return new Blob([buffer], { type: 'audio/wav' });
+    }
+
+    function writeString(view, offset, str) {
+      for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    }
+
+    // Initialize or destroy Silero VAD
+    async function toggleVad(enable) {
+      if (enable && !vadInstance) {
+        // Stop any manual recording in progress
+        if (isRecording) stopRecording();
+
+        vadLoading = true;
+        vadBadge.className = 'badge badge-yellow';
+        vadBadge.textContent = '🧠 VAD: Loading...';
+        vadStatusLabel.innerHTML = '⏳ <strong>Loading Silero VAD v5 model...</strong> (ONNX Runtime Web)';
+        vadListeningBanner.style.display = 'flex';
+
+        try {
+          vadInstance = await vad.MicVAD.new({
+            positiveSpeechThreshold: 0.80,
+            negativeSpeechThreshold: 0.35,
+            minSpeechFrames: 4,
+            preSpeechPadFrames: 6,
+            redemptionFrames: 12,
+
+            onSpeechStart: () => {
+              console.log('[VAD] 🎙️ Speech START detected');
+              vadSpeechActive = true;
+
+              // Barge-in: if agent is currently speaking, interrupt it!
+              if (isPlayingQueue || (window.speechSynthesis && window.speechSynthesis.speaking)) {
+                stopAgentSpeech(false);
+                appendMessage('⚡ Barge-in detected (Neural VAD)', false, true);
+              }
+
+              // Visual feedback
+              vadListeningBanner.classList.add('vad-speech-detected');
+              vadStatusLabel.innerHTML = '🎙️ <strong>Speech Detected</strong> — Recording...';
+              micBtn.classList.add('vad-speech');
+              recordingBanner.style.display = 'flex';
+              recordStartTime = Date.now();
+              recordTimer.textContent = '00:00';
+              clearInterval(timerInterval);
+              timerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - recordStartTime) / 1000);
+                const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+                const secs = String(elapsed % 60).padStart(2, '0');
+                recordTimer.textContent = `${mins}:${secs}`;
+              }, 500);
+            },
+
+            onSpeechEnd: (audio) => {
+              console.log(`[VAD] 🔇 Speech END detected (${audio.length} samples, ${(audio.length/16000).toFixed(1)}s)`);
+              vadSpeechActive = false;
+
+              // Reset visual feedback
+              vadListeningBanner.classList.remove('vad-speech-detected');
+              vadStatusLabel.innerHTML = '🧠 <strong>Neural VAD Listening</strong> — Silero v5 (ONNX)';
+              micBtn.classList.remove('vad-speech');
+              recordingBanner.style.display = 'none';
+              clearInterval(timerInterval);
+
+              // Skip very short utterances (< 0.3s = noise/clicks)
+              if (audio.length < 4800) {
+                console.log('[VAD] Skipping too-short audio segment');
+                return;
+              }
+
+              // Convert Float32Array → WAV blob → send to pipeline
+              const wavBlob = float32ToWavBlob(audio, 16000);
+              console.log(`[VAD] Sending ${(wavBlob.size / 1024).toFixed(1)}KB WAV to pipeline`);
+
+              if (activeMode === 'websocket' && wsConnected) {
+                // Send via WebSocket: audio_start → binary WAV → audio_end
+                sendWsMessage({ type: 'audio_start' });
+                wavBlob.arrayBuffer().then(buf => {
+                  if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(buf);
+                  }
+                  sendWsMessage({ type: 'audio_end', mimeType: 'audio/wav', filename: 'vad-speech.wav' });
+                });
+              } else {
+                // Fallback: HTTP batch upload
+                uploadHttpAudio(wavBlob, 'audio/wav');
+              }
+            },
+
+            onFrameProcessed: (probs) => {
+              // Update real-time confidence meter
+              const pct = Math.round((probs.isSpeech || 0) * 100);
+              vadConfidenceText.textContent = `${pct}%`;
+              vadConfidenceFill.style.width = `${pct}%`;
+
+              if (pct > 80) {
+                vadConfidenceFill.style.background = 'linear-gradient(90deg, #38bdf8, #c084fc)';
+              } else if (pct > 50) {
+                vadConfidenceFill.style.background = 'linear-gradient(90deg, #34d399, #38bdf8)';
+              } else {
+                vadConfidenceFill.style.background = 'linear-gradient(90deg, #34d399, #38bdf8)';
+              }
+            },
+
+            onnxWASMBasePath: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/',
+            modelURL: 'https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.31/dist/silero_vad_legacy.onnx',
+          });
+
+          vadInstance.start();
+          vadActive = true;
+          vadLoading = false;
+
+          vadBadge.className = 'badge badge-teal';
+          vadBadge.textContent = '🧠 VAD: Active';
+          vadStatusLabel.innerHTML = '🧠 <strong>Neural VAD Listening</strong> — Silero v5 (ONNX)';
+          vadListeningBanner.style.display = 'flex';
+
+          // Change mic button to indicate VAD-active state
+          micBtn.classList.add('vad-active');
+          micIcon.textContent = '🧠';
+
+          appendMessage('🧠 Neural VAD activated! Speak naturally — I\'ll detect your voice automatically. No button needed!', false, true);
+          console.log('[VAD] ✅ Silero VAD initialized and listening');
+
+        } catch (err) {
+          console.error('[VAD INIT ERROR]', err);
+          vadBadge.className = 'badge badge-red';
+          vadBadge.textContent = '🧠 VAD: Error';
+          vadListeningBanner.style.display = 'none';
+          vadLoading = false;
+          vadToggle.checked = false;
+          appendMessage('⚠️ Neural VAD failed to initialize: ' + (err.message || 'Check browser compatibility'), false, true);
+        }
+
+      } else if (!enable && vadInstance) {
+        // Destroy VAD
+        try {
+          vadInstance.pause();
+          vadInstance.destroy();
+        } catch (e) {
+          console.warn('[VAD] Cleanup warning:', e);
+        }
+        vadInstance = null;
+        vadActive = false;
+        vadSpeechActive = false;
+
+        vadBadge.className = 'badge badge-purple';
+        vadBadge.textContent = '🧠 VAD: Off';
+        vadListeningBanner.style.display = 'none';
+        vadListeningBanner.classList.remove('vad-speech-detected');
+        recordingBanner.style.display = 'none';
+        clearInterval(timerInterval);
+
+        // Restore mic button to normal
+        micBtn.classList.remove('vad-active', 'vad-speech');
+        micIcon.textContent = '🎙️';
+
+        vadConfidenceText.textContent = '0%';
+        vadConfidenceFill.style.width = '0%';
+
+        appendMessage('🎙️ Neural VAD deactivated. Push-to-talk mode restored.', false, true);
+        console.log('[VAD] ❌ Silero VAD stopped and destroyed');
+      }
+    }
+
+    // VAD toggle switch event
+    vadToggle.addEventListener('change', () => {
+      toggleVad(vadToggle.checked);
     });
 
     // Test Voice Button Handler

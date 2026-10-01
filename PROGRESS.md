@@ -6,7 +6,7 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 ---
 
 ## 🚦 Current Status Summary
-- **Current Phase:** ✅ **Stage 7 Native Cross-Platform Mobile & Desktop App (iOS, Android & macOS) & Stage 6.6 Auto-Reject Calls with Urdu-English Dual Modality**
+- **Current Phase:** ✅ **Stage 8 Client-Side Neural VAD (Silero) & Stage 7 Native Cross-Platform Mobile App & Stage 6.6 Auto-Reject Calls with Urdu-English Dual Modality**
 - **Protocols & Gateways:** 
   - 📲 **Native Cross-Platform App (Stage 7 Active):** React Native + Expo SDK 54 TypeScript application in [`VoiceAgentApp/`](file:///c:/voice%20agenty/VoiceAgentApp) with dark glassmorphic design system, Live Voice Studio (mic recording + latency telemetry), Call History with expandable transcripts, and Settings with health diagnostics and auto-server discovery (iOS, Android, macOS).
   - 💬 **Personal WhatsApp AI Voice Agent (Stage 6.6 Active - Port 3005):** Node.js Baileys service in [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), instant call auto-rejection (`sock.rejectCall()`) + deflection greeting voice note, bilingual dual-modality (Urdu text ➔ Roman Urdu, Urdu voice ➔ Spoken Urdu audio note), QR pairing on `http://localhost:3005/qr`, and status API (`GET /status`).
@@ -25,7 +25,7 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 - **Mouth (Speaking):**
   - Web & Telephony: ✅ **ElevenLabs Flash v2.5 (`eleven_flash_v2_5`)** with Charlie male voice (`IKne3meq5aSn9XLyUdCD`)
   - WhatsApp Voice Notes: ✅ **ElevenLabs Charlie (`IKne3meq5aSn9XLyUdCD`) via `eleven_multilingual_v2`** with zero-cost male fallback (`ur-PK-AsadNeural` for Urdu, `en-US-GuyNeural` for English)
-- **Voice Activity Detection (VAD):** ✅ Real-time RMS energy detector on 20ms audio chunks with ~700ms silence detection
+- **Voice Activity Detection (VAD):** ✅ **Silero Neural VAD v5 (ONNX Runtime Web)** — Client-side ML voice detection in browser with `@ricky0123/vad-web`, real-time speech probability meter, auto-record on speech start, auto-send on speech end, auto-barge-in when user interrupts AI. Fallback: RMS energy detector on 20ms audio chunks with ~700ms silence detection (telephony)
 - **Phone Interruption Handling:** ✅ **Live Phone Barge-In**: Emits Twilio/Telnyx `clear` event in <50ms to wipe phone line buffer
 - **Call Summaries & Notifications:** ✅ Automatic Groq LLM post-call summary + Telnyx / Twilio SMS delivery to `PERSONAL_PHONE_NUMBER` (`+923154483615`)
 - **Call History Persistence:** ✅ In-memory cache + automatic disk backup to `call-history.json`
@@ -350,6 +350,32 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 - [x] **Tab Navigation & Native App Config ([`App.tsx`](file:///c:/voice%20agenty/VoiceAgentApp/App.tsx) & [`app.json`](file:///c:/voice%20agenty/VoiceAgentApp/app.json))**:
   - Tab navigator with icons and status header showing real-time backend connection pill (`Connected 🟢` / `Offline 🔴`).
   - Bundle ID `com.voiceagent.app` with native microphone permissions (`NSMicrophoneUsageDescription`, `android.permission.RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`).
+
+### Stage 8: Client-Side Neural VAD — Silero Voice Activity Detection (Hands-Free)
+- [x] **Silero VAD v5 ONNX Model Integration**:
+  - Loaded Silero VAD v5 neural network model directly in the browser via ONNX Runtime Web (`onnxruntime-web@1.22.0`).
+  - Used `@ricky0123/vad-web@0.0.31` library via CDN for managed microphone capture, Audio Worklet processing, and speech event callbacks.
+  - Zero server-side processing — the ML model runs entirely client-side in WebAssembly.
+- [x] **Automatic Speech Detection & Pipeline Trigger**:
+  - `onSpeechStart` callback: Detects human voice and triggers visual recording indicator. Automatically barge-in interrupts the AI if it is currently speaking.
+  - `onSpeechEnd` callback: Receives captured speech as `Float32Array` (16kHz sample rate), converts to standard WAV blob via custom `float32ToWavBlob()` encoder, and sends through the existing WebSocket STT→LLM→TTS pipeline.
+  - Minimum utterance filter: Skips audio segments shorter than 0.3 seconds (4,800 samples) to prevent noise/click false positives.
+- [x] **Real-Time Neural Activity Visualization**:
+  - Animated neural bar visualizer (6 bars) with CSS keyframe animations showing idle listening state.
+  - Speech-detected state: Bars turn blue and accelerate to 0.4s animation cycle.
+  - Real-time speech probability confidence meter showing Silero model output percentage (0–100%) with gradient fill bar.
+- [x] **VAD Toggle & UI Integration**:
+  - New `🧠 Neural VAD (Hands-Free)` checkbox toggle in the controls panel.
+  - `🧠 VAD: Off/Loading/Active/Error` status badge in the header badge group.
+  - Dedicated listening banner with pulse-border animation and real-time confidence meter.
+  - Mic button transforms: shows 🧠 icon with green glow animation and pulsing activity dot when VAD is active.
+  - Clicking the mic button while VAD is active gracefully deactivates VAD and restores push-to-talk mode.
+- [x] **Configurable VAD Parameters**:
+  - `positiveSpeechThreshold: 0.80` — High confidence required to trigger speech start (reduces false positives).
+  - `negativeSpeechThreshold: 0.35` — Lower threshold for speech end detection (natural trailing off).
+  - `minSpeechFrames: 4` — Minimum consecutive speech frames before triggering.
+  - `preSpeechPadFrames: 6` — Captures 6 frames of audio before speech onset for natural word beginnings.
+  - `redemptionFrames: 12` — Allows up to 12 frames of silence mid-speech without ending the utterance.
 
 
 ---
@@ -703,8 +729,13 @@ PERSONAL_PHONE_NUMBER=+923154483615
   - Add production `WHATSAPP_TOKEN` and `PHONE_NUMBER_ID` in `whatsapp-bot/.env` to link to user's registered WhatsApp business number.
 - [ ] **Meta Cloud API WebRTC Calling Media Bridge**:
   - Implement full-duplex WebRTC audio connection using Pion or Mediasoup for direct in-app WhatsApp live voice calling.
-- [ ] **Client-Side Neural VAD (Silero VAD)**:
-  - High-accuracy ML voice detection in the browser and mobile app to eliminate button pressing entirely.
+- [x] **Client-Side Neural VAD (Silero VAD)**:
+  - High-accuracy ML voice detection running directly in the browser via ONNX Runtime Web.
+  - `@ricky0123/vad-web` v0.0.31 with Silero VAD v5 ONNX model loaded from CDN.
+  - `onSpeechStart` callback triggers visual recording indicator and automatic barge-in if AI is speaking.
+  - `onSpeechEnd` callback converts `Float32Array` (16kHz) to WAV blob and sends through the STT→LLM→TTS pipeline.
+  - Real-time speech probability confidence meter with animated neural activity visualization.
+  - Toggle switch in controls panel to enable/disable hands-free mode.
 - [ ] **Custom Character Personas & Prompt Presets**:
   - Switchable personas: Hotel Concierge, Tech Support Specialist, Medical Receptionist, Catbot.
 

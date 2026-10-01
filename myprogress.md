@@ -8,7 +8,7 @@ A voice agent needs three main superpowers:
 2. **Brain (LLM - Large Language Model):** Reads the words, understands what you mean, and thinks of a smart response.
 3. **Mouth (Text-to-Speech):** Speaks the answer aloud so you can hear it.
 
-🎉 **Stage 5, Stage 6, Stage 6.1, Stage 6.2, Stage 6.3, Stage 6.4, Stage 6.5, Stage 6.6 & Stage 7 are documented & live:** We have officially built **Mobile Setup & Carrier Call Forwarding with SMS Summaries** (Stage 5), **WhatsApp Cloud API Voice Agent** (Stage 6), the **Direct Personal WhatsApp AI Agent with Call Interception** (Stage 6.1), **Charlie's Voice with Natural Pakistani Urdu Conversation & 1-Tap Live Call Link** (Stage 6.2), **English Default with Dynamic Urdu Language Auto-Detection & 4/4 Verification** (Stage 6.3), **Modality-Matching Routing & Non-Intrusive Call Preservation** (Stage 6.4), **WhatsApp Business Calling Architecture & Cost Analysis** (Stage 6.5), **Auto-Reject Calls & Enhanced Urdu-English Dual Modality with Roman Urdu Text & Spoken Urdu Voice Notes** (Stage 6.6), and our brand-new **Native Cross-Platform Mobile & Desktop App for iOS, Android & macOS (`VoiceAgentApp`)** (Stage 7)! Users can interact via browser, phone line, WhatsApp, or install the native AI Voice Agent app directly on their mobile phone or Mac!
+🎉 **Stage 5, Stage 6, Stage 6.1, Stage 6.2, Stage 6.3, Stage 6.4, Stage 6.5, Stage 6.6, Stage 7 & Stage 8 are documented & live:** We have officially built **Mobile Setup & Carrier Call Forwarding with SMS Summaries** (Stage 5), **WhatsApp Cloud API Voice Agent** (Stage 6), the **Direct Personal WhatsApp AI Agent with Call Interception** (Stage 6.1), **Charlie's Voice with Natural Pakistani Urdu Conversation & 1-Tap Live Call Link** (Stage 6.2), **English Default with Dynamic Urdu Language Auto-Detection & 4/4 Verification** (Stage 6.3), **Modality-Matching Routing & Non-Intrusive Call Preservation** (Stage 6.4), **WhatsApp Business Calling Architecture & Cost Analysis** (Stage 6.5), **Auto-Reject Calls & Enhanced Urdu-English Dual Modality with Roman Urdu Text & Spoken Urdu Voice Notes** (Stage 6.6), our **Native Cross-Platform Mobile & Desktop App for iOS, Android & macOS (`VoiceAgentApp`)** (Stage 7), and the brand-new **Client-Side Neural VAD with Silero AI Voice Detection (Hands-Free Mode)** (Stage 8)! Users can interact via browser (with or without pressing any button!), phone line, WhatsApp, or install the native AI Voice Agent app directly on their mobile phone or Mac!
 
 ---
 
@@ -1675,10 +1675,18 @@ VoiceAgentApp/
 
 ---
 
-## 📚 Key Concepts Dictionary (Updated for Stage 7)
+## 📚 Key Concepts Dictionary (Updated for Stage 8)
 
 | Term | What It Means in Simple Words |
 | :--- | :--- |
+| **Voice Activity Detection (VAD)** | Technology that automatically detects when a human starts and stops speaking in an audio stream, distinguishing speech from silence, background noise, and non-speech sounds. |
+| **Silero VAD** | A lightweight neural network model (~1.8MB) specifically trained to detect human speech with high accuracy. Processes 30ms audio frames in under 1 millisecond. |
+| **ONNX (Open Neural Network Exchange)** | A universal open format for representing machine learning models. Any model exported as `.onnx` can run on any platform that has an ONNX runtime (browsers, phones, servers). |
+| **ONNX Runtime Web** | A WebAssembly library that executes ONNX neural network models directly inside a web browser's JavaScript engine, with zero server-side processing required. |
+| **`@ricky0123/vad-web`** | A browser library that wraps Silero VAD with managed microphone capture, Audio Worklet processing, 16kHz resampling, and speech event callbacks (`onSpeechStart`, `onSpeechEnd`). |
+| **Float32Array** | A typed JavaScript array where each element is a 32-bit floating-point number. Used to represent raw audio samples (values between -1.0 and +1.0). |
+| **WAV (Waveform Audio File Format)** | A standard uncompressed audio file format that stores raw PCM audio data with a 44-byte RIFF header containing metadata (sample rate, bit depth, channels). |
+| **Speech Probability / Confidence** | The percentage score (0–100%) that a VAD model assigns to each audio frame, representing how confident it is that the frame contains human speech. |
 | **React Native** | A framework created by Meta that allows writing mobile apps in JavaScript/TypeScript that compile directly into real native iOS and Android buttons, views, and animations. |
 | **Expo SDK** | A modern development platform and toolchain built on top of React Native that makes developing, testing, and building mobile apps seamless across iOS, Android, and Web with zero Xcode/Android Studio hassles. |
 | **Cross-Platform** | Software designed to run on multiple different operating systems (iOS, Android, macOS, Windows) using a single unified codebase. |
@@ -1717,6 +1725,81 @@ VoiceAgentApp/
 
 ---
 
+## 🛠️ What We Did in Stage 8 (Step-by-Step in Easy Words)
+
+### 🧠 Stage 8: Client-Side Neural VAD — Silero AI Voice Detection (Hands-Free Mode)
+
+#### 1. The Problem: "Why Do I Have to Press a Button to Talk?"
+* In Stage 3, we built push-to-talk: you click the 🎙️ microphone button, speak, click again, and the AI responds.
+* But in real life, when you talk to a person, you don't press a button before opening your mouth! You just… talk. And the other person knows to listen when you start and stop.
+* **The question:** How can we teach the computer to figure out *on its own* when you start talking and when you stop, without any button?
+
+#### 2. The Solution: A Tiny AI Brain That Listens for Your Voice
+* **Silero VAD (Voice Activity Detector)** is a neural network model specifically trained to answer one simple question: *"Is this sound human speech, or is it background noise?"*
+* It was trained on thousands of hours of speech and non-speech audio, so it can tell the difference between:
+  - ✅ A human saying "Hello, how are you?" → **Speech detected (probability: 95%)**
+  - ❌ A keyboard clicking, fan noise, music, coughs → **Not speech (probability: 5%)**
+* The model is incredibly tiny (~1.8MB ONNX file) and runs a prediction in **under 1 millisecond** on a single audio frame!
+
+#### 3. How Does a Neural Network Run in a Web Browser?
+* Normally, neural networks run on powerful servers with GPUs. But Silero VAD is so small that it can run directly **inside your web browser** using two technologies:
+  - **ONNX Runtime Web (`onnxruntime-web`):** This is a WebAssembly (WASM) library that can execute any ONNX-format neural network model directly in the browser's JavaScript engine. No server needed!
+  - **`@ricky0123/vad-web`:** A wrapper library that handles all the complex audio plumbing — opening your microphone, resampling audio to 16kHz, chunking it into 30ms frames, feeding each frame to the Silero ONNX model, and firing callback events when speech starts or ends.
+* We load both libraries directly from CDN:
+  ```html
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.31/dist/bundle.min.js"></script>
+  ```
+
+#### 4. The Full Hands-Free Pipeline (What Happens When You Just Talk)
+1. **You toggle the `🧠 Neural VAD (Hands-Free)` switch ON** in the controls panel.
+2. The browser asks for microphone permission and starts capturing audio continuously.
+3. The Silero model processes every 30ms audio frame and produces a **speech probability** score (0% to 100%).
+4. **You start speaking** → The probability crosses the `positiveSpeechThreshold` (80%) → `onSpeechStart()` fires:
+   - The banner turns blue: *"🎙️ Speech Detected — Recording..."*
+   - The mic button glows blue.
+   - If the AI agent was already speaking, it's **automatically interrupted** (Neural Barge-In!).
+5. **You stop speaking** → Silence is detected → The probability drops below `negativeSpeechThreshold` (35%) → `onSpeechEnd(audio)` fires:
+   - The `audio` parameter is a `Float32Array` of your speech at 16,000 samples per second.
+   - We convert it to a standard WAV file using our custom `float32ToWavBlob()` function.
+   - The WAV is sent through the WebSocket → Whisper STT → Groq LLM → ElevenLabs TTS → audio plays back!
+6. **The AI responds, and the cycle repeats!** You can talk again naturally — no buttons needed.
+
+#### 5. Float32Array → WAV Conversion (How Raw Samples Become an Audio File)
+* The Silero VAD gives us raw audio as a `Float32Array` — just numbers between -1.0 and +1.0 representing the sound wave.
+* But Whisper STT expects a proper audio file format. So we build a WAV file from scratch:
+  1. **Write a 44-byte RIFF/WAV header** with the magic bytes `RIFF`, `WAVE`, `fmt `, and `data`.
+  2. **Convert each Float32 sample to a 16-bit signed integer** (the standard PCM format): `sample * 32767`.
+  3. **Wrap it in a Blob** with MIME type `audio/wav`.
+* This is exactly what professional audio software does — we're just doing it in JavaScript!
+
+#### 6. The Smart Thresholds (Preventing False Triggers)
+* Not every tiny sound should trigger the AI. The VAD uses carefully tuned parameters:
+  - **`positiveSpeechThreshold: 0.80`** — The model must be 80% confident it's hearing speech before it starts recording. This prevents keyboard clicks, coughs, or brief noises from triggering.
+  - **`negativeSpeechThreshold: 0.35`** — Speech ends when confidence drops below 35%. This is lower than the start threshold to avoid cutting off words that naturally trail off quietly.
+  - **`minSpeechFrames: 4`** — At least 4 consecutive frames (~120ms) must register as speech. A single frame blip is ignored.
+  - **`preSpeechPadFrames: 6`** — Captures 6 frames (~180ms) of audio *before* the speech was detected. This ensures the very first syllable of your word isn't clipped.
+  - **`redemptionFrames: 12`** — Allows up to 12 frames (~360ms) of silence in the middle of a sentence (natural pauses like "I want... um... pizza") without ending the recording.
+  - **Minimum length filter: 4,800 samples (0.3s)** — Utterances shorter than 0.3 seconds are skipped entirely (likely noise).
+
+#### 7. Auto Barge-In (Neural Interruption)
+* In push-to-talk mode, pressing the mic button while the AI is speaking triggers a manual barge-in.
+* With Neural VAD, this is **automatic**: the moment Silero detects your voice while the AI is playing audio:
+  1. `onSpeechStart` fires.
+  2. The code checks if `isPlayingQueue` is true (AI audio is playing).
+  3. If yes → `stopAgentSpeech(false)` is called → AI audio stops immediately, WebSocket sends interrupt to server, server aborts the Groq stream.
+  4. Your new speech is captured and processed.
+* Result: **True natural conversation flow** — you can interrupt the AI mid-sentence just by speaking!
+
+#### 8. Visual Design (The Neural Listening Experience)
+* **Listening Banner**: A teal-bordered banner with subtle pulse animation shows `🧠 Neural VAD Listening — Silero v5 (ONNX)`.
+* **Neural Bar Visualizer**: 6 animated bars dance with staggered CSS animations to show the model is actively processing audio.
+* **When Speech is Detected**: The banner shifts to blue, bars animate faster, and the status changes to `🎙️ Speech Detected — Recording...`.
+* **Confidence Meter**: A real-time percentage display and gradient fill bar show exactly how confident the model is that it's hearing speech (e.g., `87%`).
+* **Mic Button Transformation**: The 🎙️ icon changes to 🧠 with a green glow animation and a small pulsing activity dot in the corner.
+
+---
+
 ## 🚀 What We Are Ready to Build Next (Future Roadmap)
 1. **Stage 6.1 Direct Personal WhatsApp Integration via Baileys (Completed! ✅):**
    - Universal QR scan pairing (`http://localhost:3005/qr`), real-time call interception, and native Opus PTT voice notes.
@@ -1728,10 +1811,10 @@ VoiceAgentApp/
    - Instant `sock.rejectCall()`, automated Charlie voice note greeting + live call link, Roman Urdu for text chats, and spoken Urdu for audio notes.
 5. **Stage 7 Native Cross-Platform Mobile & Desktop App for iOS, Android & macOS (Completed! ✅):**
    - React Native Expo application (`VoiceAgentApp/`) with Voice Studio, Call History, Settings, and real-time telemetry.
-6. **Meta Cloud API WebRTC / SIP Calling Production Deployment:**
+6. **Stage 8 Client-Side Neural VAD with Silero AI Voice Detection (Completed! ✅):**
+   - Silero VAD v5 running in-browser via ONNX Runtime Web. Automatic speech detection, pipeline trigger, neural barge-in, and real-time confidence visualization.
+7. **Meta Cloud API WebRTC / SIP Calling Production Deployment:**
    - Link production WABA credentials and deploy WebRTC RTP audio bridge for real-time live WhatsApp VoIP phone calls.
-7. **Client-Side Neural VAD (Silero VAD):**
-   - Pure machine-learning voice activity detection running directly in the browser and mobile app with zero buttons.
 8. **Custom Character Personas & Prompt Presets:**
    - Switchable agent personalities: Hotel Concierge, Tech Support Specialist, Medical Clinic Receptionist, and friendly assistant.
 
