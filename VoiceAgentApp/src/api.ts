@@ -5,12 +5,18 @@
 
 import { Platform } from 'react-native';
 
+export const PRESET_SERVERS = [
+  { label: '🏠 Wi-Fi (PC)', url: 'http://192.168.100.162:3000' },
+  { label: '🌐 Live Tunnel', url: 'https://large-hotels-listen.loca.lt' },
+  { label: '🤖 Emulator', url: 'http://10.0.2.2:3000' },
+  { label: '💻 Localhost', url: 'http://localhost:3000' },
+];
+
 // Auto-detect the backend URL based on platform
 function getDefaultServerUrl(): string {
-  // On physical device, you need to use your machine's LAN IP
-  // On emulator: Android uses 10.0.2.2, iOS uses localhost
+  // On physical Android device or APK, use PC's LAN IP
   if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:3000';
+    return 'http://192.168.100.162:3000';
   }
   return 'http://localhost:3000';
 }

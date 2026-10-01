@@ -16,7 +16,7 @@ import {
   Platform,
 } from 'react-native';
 import { Colors, Spacing, Radius, FontSizes, FontWeights } from '../theme';
-import { fetchHealth, getServerUrl, setServerUrl, fetchWhatsAppStatus, HealthStatus, WhatsAppStatus } from '../api';
+import { fetchHealth, getServerUrl, setServerUrl, fetchWhatsAppStatus, HealthStatus, WhatsAppStatus, PRESET_SERVERS } from '../api';
 
 export default function SettingsScreen() {
   const [serverUrl, setServerUrlState] = useState(getServerUrl());
@@ -108,6 +108,30 @@ export default function SettingsScreen() {
           <TouchableOpacity style={styles.saveBtn} onPress={handleSaveUrl}>
             <Text style={styles.saveBtnText}>Save</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Quick Presets */}
+        <View style={styles.presetsRow}>
+          {PRESET_SERVERS.map((preset) => {
+            const isActive = urlInput.trim().replace(/\/+$/, '') === preset.url.trim().replace(/\/+$/, '');
+            return (
+              <TouchableOpacity
+                key={preset.url}
+                style={[styles.presetChip, isActive && styles.presetChipActive]}
+                onPress={() => {
+                  setUrlInput(preset.url);
+                  setServerUrl(preset.url);
+                  setServerUrlState(preset.url);
+                  // auto test on preset change
+                  setTimeout(checkConnection, 100);
+                }}
+              >
+                <Text style={[styles.presetChipText, isActive && styles.presetChipTextActive]}>
+                  {preset.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         <TouchableOpacity
@@ -296,6 +320,34 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: FontWeights.semibold,
     fontSize: FontSizes.sm,
+  },
+  presetsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  presetChip: {
+    backgroundColor: Colors.bgInput,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  presetChipActive: {
+    backgroundColor: Colors.primaryDim,
+    borderColor: Colors.primary,
+  },
+  presetChipText: {
+    color: Colors.textDark,
+    fontSize: FontSizes.xs,
+    fontWeight: FontWeights.medium,
+  },
+  presetChipTextActive: {
+    color: Colors.primary,
+    fontWeight: FontWeights.bold,
   },
   testBtn: {
     backgroundColor: Colors.primaryDim,
