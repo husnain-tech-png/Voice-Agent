@@ -6,7 +6,7 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
 ---
 
 ## 🚦 Current Status Summary
-- **Current Phase:** ✅ **Stage 8 Client-Side Neural VAD (Silero) & Stage 7 Native Cross-Platform Mobile App & Stage 6.6 Auto-Reject Calls with Urdu-English Dual Modality**
+- **Current Phase:** ✅ **Stage 9 Standalone Android APK Build, Toolchain Setup & Repository Hygiene & Stage 8 Client-Side Neural VAD (Silero) & Stage 7 Native Cross-Platform Mobile App & Stage 6.6 Auto-Reject Calls with Urdu-English Dual Modality**
 - **Protocols & Gateways:** 
   - 📲 **Native Cross-Platform App (Stage 7 Active):** React Native + Expo SDK 54 TypeScript application in [`VoiceAgentApp/`](file:///c:/voice%20agenty/VoiceAgentApp) with dark glassmorphic design system, Live Voice Studio (mic recording + latency telemetry), Call History with expandable transcripts, and Settings with health diagnostics and auto-server discovery (iOS, Android, macOS).
   - 💬 **Personal WhatsApp AI Voice Agent (Stage 6.6 Active - Port 3005):** Node.js Baileys service in [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), instant call auto-rejection (`sock.rejectCall()`) + deflection greeting voice note, bilingual dual-modality (Urdu text ➔ Roman Urdu, Urdu voice ➔ Spoken Urdu audio note), QR pairing on `http://localhost:3005/qr`, and status API (`GET /status`).
@@ -377,6 +377,21 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
   - `preSpeechPadFrames: 6` — Captures 6 frames of audio before speech onset for natural word beginnings.
   - `redemptionFrames: 12` — Allows up to 12 frames of silence mid-speech without ending the utterance.
 
+### Stage 9: Standalone Android APK Build, Toolchain Setup & Repository Hygiene
+- [x] **Native Toolchain & Environment Configuration**:
+  - Configured Amazon Corretto OpenJDK 17 LTS (`C:\Users\User\jdk17.0.20_12`) and linked Android SDK platform-tools.
+  - Linked Android NDK `28.2.13676358` in `VoiceAgentApp/android/build.gradle` and `app/build.gradle`.
+  - Added direct Cloudflare React Native Maven mirror (`https://repo.reactnative.dev/maven2`) in root repository settings for fast dependency resolution.
+- [x] **Cleartext Traffic & Network Resilience**:
+  - Enabled `android:usesCleartextTraffic="true"` in AndroidManifest to permit local HTTP/WebSocket LAN communication.
+  - Added preset chips in `SettingsScreen.tsx` for quick 1-tap switching between Localhost, Android Emulator, Live Tunnel, and LAN Wi-Fi.
+- [x] **1-Click Local Build Script ([`build-apk.bat`](file:///c:/voice%20agenty/build-apk.bat))**:
+  - Automated offline bundle packaging (598 JS modules via Metro into `index.android.bundle`), C++ compilation for all ABI architectures (`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`), dexing, and release APK generation.
+- [x] **Repository Hygiene & Localhost Reversion**:
+  - Excluded `.apk` binaries from version control by adding `*.apk` to [`.gitignore`](file:///c:/voice%20agenty/.gitignore) to eliminate Git LFS bloat.
+  - Safely removed compiled binary from Git tracking (`git rm -f AI-Voice-Agent.apk`) and deleted local output folders.
+  - Reverted default backend connection in [`VoiceAgentApp/src/api.ts`](file:///c:/voice%20agenty/VoiceAgentApp/src/api.ts) to `http://localhost:3000` (`http://10.0.2.2:3000` for Android emulator) with Localhost prioritized as the primary chip.
+  - Fixed React Native style condition in [`VoiceStudioScreen.tsx`](file:///c:/voice%20agenty/VoiceAgentApp/src/screens/VoiceStudioScreen.tsx) and verified clean TypeScript typecheck (`npx tsc --noEmit` exited 0).
 
 ---
 
@@ -736,6 +751,8 @@ PERSONAL_PHONE_NUMBER=+923154483615
   - `onSpeechEnd` callback converts `Float32Array` (16kHz) to WAV blob and sends through the STT→LLM→TTS pipeline.
   - Real-time speech probability confidence meter with animated neural activity visualization.
   - Toggle switch in controls panel to enable/disable hands-free mode.
+- [x] **Stage 9: Standalone Android APK Build, Toolchain Setup & Repository Hygiene**:
+  - Production Android APK compilation with offline bundle, cleartext HTTP support, 1-click builder script (`build-apk.bat`), Git `*.apk` ignore, and default localhost connection.
 - [ ] **Custom Character Personas & Prompt Presets**:
   - Switchable personas: Hotel Concierge, Tech Support Specialist, Medical Receptionist, Catbot.
 

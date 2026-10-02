@@ -1835,12 +1835,23 @@ When transitioning from a browser-based web studio to an Android APK app, two ma
 - Added the direct Cloudflare React Native Maven mirror (`https://repo.reactnative.dev/maven2`) for instantaneous dependency resolution.
 - CMake compiled native C++ code for all major Android architectures (`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`).
 
-#### D. Standalone Release APK Generated:
+#### D. Standalone Release APK Generated & 1-Click Builder:
 - Metro compiled 598 JavaScript modules into an offline bundle (`index.android.bundle`).
 - Dexing and resource packaging completed with 100% success.
-- Final standalone APK generated and copied to:
-  `c:\voice agenty\AI-Voice-Agent.apk` (~71.1 MB).
-- Created a convenient 1-click builder script: [`c:\voice agenty\build-apk.bat`](file:///c:/voice%20agenty/build-apk.bat).
+- Created a convenient 1-click builder script: [`c:\voice agenty\build-apk.bat`](file:///c:/voice%20agenty/build-apk.bat) that sets up the Corretto Java 17 LTS and Android SDK environment, runs `assembleRelease`, and copies the freshly generated APK directly.
+
+---
+
+### 3. Repository Hygiene & Reverting to Localhost Development
+- **Git Binary Hygiene:**
+  - Committing large compiled binaries (~71 MB `.apk`) directly into Git repositories quickly bloats repository size and triggers Git LFS bandwidth warnings on GitHub.
+  - Safely removed the APK file from Git tracking (`git rm -f AI-Voice-Agent.apk`) and deleted local intermediate APK build folders.
+  - Added `*.apk` to [`.gitignore`](file:///c:/voice%20agenty/.gitignore) so future local builds will never accidentally be committed into source control.
+  - The local build toolchain (`build-apk.bat`, JDK 17, NDK 28, Gradle config) remains 100% ready to produce a fresh `.apk` whenever needed in under 2 minutes.
+- **Reverting Server URL to Localhost:**
+  - In [`VoiceAgentApp/src/api.ts`](file:///c:/voice%20agenty/VoiceAgentApp/src/api.ts), reverted the default server URL back to `http://localhost:3000` (and `http://10.0.2.2:3000` for Android emulator loopback).
+  - Placed `💻 Localhost` as the primary preset chip in `PRESET_SERVERS` followed by `🤖 Android Emulator`, `🌐 Live Tunnel`, and `🏠 Wi-Fi (LAN)`.
+  - Fixed a React Native style type condition in [`VoiceAgentApp/src/screens/VoiceStudioScreen.tsx`](file:///c:/voice%20agenty/VoiceAgentApp/src/screens/VoiceStudioScreen.tsx) and verified clean TypeScript compilation (`npx tsc --noEmit` exited 0).
 
 ---
 
