@@ -307,7 +307,7 @@ export default function VoiceStudioScreen() {
       <View style={styles.telemetryGrid}>
         <View style={styles.telemetryItem}>
           <Text style={styles.telemetryLabel}>⚡ TTFA</Text>
-          <Text style={[styles.telemetryValue, latency.ttfa && latency.ttfa < 500 && styles.telemetryGood]}>
+          <Text style={[styles.telemetryValue, (latency.ttfa !== null && latency.ttfa < 500) ? styles.telemetryGood : null]}>
             {latency.ttfa ? `${latency.ttfa}ms` : '—'}
           </Text>
         </View>
