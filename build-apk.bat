@@ -5,7 +5,7 @@ echo ========================================================
 echo   AI Voice Agent - Android APK Local Builder
 echo ========================================================
 
-set "JAVA_HOME=C:\Program Files\Android\Android Studio\jbr"
+set "JAVA_HOME=C:\Users\User\jdk17.0.20_12"
 set "ANDROID_HOME=C:\Users\User\AppData\Local\Android\Sdk"
 set "PATH=%JAVA_HOME%\bin;%ANDROID_HOME%\platform-tools;%PATH%"
 

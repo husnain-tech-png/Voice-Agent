@@ -8,7 +8,7 @@ A voice agent needs three main superpowers:
 2. **Brain (LLM - Large Language Model):** Reads the words, understands what you mean, and thinks of a smart response.
 3. **Mouth (Text-to-Speech):** Speaks the answer aloud so you can hear it.
 
-🎉 **Stage 5, Stage 6, Stage 6.1, Stage 6.2, Stage 6.3, Stage 6.4, Stage 6.5, Stage 6.6, Stage 7 & Stage 8 are documented & live:** We have officially built **Mobile Setup & Carrier Call Forwarding with SMS Summaries** (Stage 5), **WhatsApp Cloud API Voice Agent** (Stage 6), the **Direct Personal WhatsApp AI Agent with Call Interception** (Stage 6.1), **Charlie's Voice with Natural Pakistani Urdu Conversation & 1-Tap Live Call Link** (Stage 6.2), **English Default with Dynamic Urdu Language Auto-Detection & 4/4 Verification** (Stage 6.3), **Modality-Matching Routing & Non-Intrusive Call Preservation** (Stage 6.4), **WhatsApp Business Calling Architecture & Cost Analysis** (Stage 6.5), **Auto-Reject Calls & Enhanced Urdu-English Dual Modality with Roman Urdu Text & Spoken Urdu Voice Notes** (Stage 6.6), our **Native Cross-Platform Mobile & Desktop App for iOS, Android & macOS (`VoiceAgentApp`)** (Stage 7), and the brand-new **Client-Side Neural VAD with Silero AI Voice Detection (Hands-Free Mode)** (Stage 8)! Users can interact via browser (with or without pressing any button!), phone line, WhatsApp, or install the native AI Voice Agent app directly on their mobile phone or Mac!
+🎉 **Stage 5 through Stage 9 are documented & live:** We have officially built **Mobile Setup & Carrier Call Forwarding with SMS Summaries** (Stage 5), **WhatsApp Cloud API Voice Agent** (Stage 6), the **Direct Personal WhatsApp AI Agent with Call Interception** (Stage 6.1), **Charlie's Voice with Natural Pakistani Urdu Conversation & 1-Tap Live Call Link** (Stage 6.2), **English Default with Dynamic Urdu Language Auto-Detection & 4/4 Verification** (Stage 6.3), **Modality-Matching Routing & Non-Intrusive Call Preservation** (Stage 6.4), **WhatsApp Business Calling Architecture & Cost Analysis** (Stage 6.5), **Auto-Reject Calls & Enhanced Urdu-English Dual Modality with Roman Urdu Text & Spoken Urdu Voice Notes** (Stage 6.6), our **Native Cross-Platform Mobile & Desktop App for iOS, Android & macOS (`VoiceAgentApp`)** (Stage 7), the **Client-Side Neural VAD with Silero AI Voice Detection (Hands-Free Mode)** (Stage 8), and the **Standalone Android APK with Local Network Resolution & 1-Click Offline Builder** (Stage 9)! Users can interact via browser, phone line, WhatsApp, or install the standalone release APK directly on any Android smartphone!
 
 ---
 
@@ -1800,6 +1800,50 @@ VoiceAgentApp/
 
 ---
 
+## 📱 Stage 9: Standalone Android APK Build & Local Network Resolution (Completed! ✅)
+
+### 1. The Core Challenges We Solved
+When transitioning from a browser-based web studio to an Android APK app, two major obstacles arise:
+1. **The "Localhost" Illusion on Mobile Devices:**
+   - On a PC browser, `localhost:3000` refers to your computer.
+   - On an Android phone, `localhost` refers to the **phone itself**, not the computer running your AI backend!
+   - Furthermore, Android 9+ (API 28+) strictly blocks plain unencrypted HTTP connections (`ERR_CLEARTEXT_NOT_PERMITTED`) by default.
+2. **Native Toolchain & Gradle Compilation Complexities:**
+   - Android Studio bundled Java 25 (JBR 25), which caused Gradle toolchain errors (`Cannot find Java installation matching: {languageVersion=17}`) and broke AGP's Prefab C++ native library processor.
+   - AGP looked for an uninstalled NDK version (`27.1.12297006`), causing native compilation failure.
+   - Maven Central download latency for React Native native binaries caused build timeouts.
+
+---
+
+### 2. How We Fixed Everything Step-by-Step
+
+#### A. Network & Cleartext Traffic Fix:
+- Added `android:usesCleartextTraffic="true"` to `AndroidManifest.xml` so the phone can communicate over local Wi-Fi HTTP.
+- Configured dynamic LAN IP detection (`http://10.9.26.152:3000`) and built 1-tap connection chips inside the app's Settings screen:
+  - 🏠 **Wi-Fi PC (`http://10.9.26.152:3000`)**
+  - 🌐 **Live Public Tunnel (`https://large-hotels-listen.loca.lt`)**
+  - 📶 **Home Wi-Fi (`http://192.168.100.162:3000`)**
+  - 🤖 **Android Emulator (`http://10.0.2.2:3000`)**
+  - 💻 **Custom URL Input** (allows typing any IP or tunnel address anytime)
+
+#### B. Java 17 LTS & Toolchain Setup:
+- Installed Amazon Corretto OpenJDK 17 LTS (`C:\Users\User\jdk17.0.20_12`).
+- Fixed Gradle JVM toolchain in `@react-native/gradle-plugin` submodules to use standard Java 17.
+
+#### C. NDK & Native C++ Architecture Compilation:
+- Linked existing Android NDK `28.2.13676358` in both `build.gradle` and `app/build.gradle`.
+- Added the direct Cloudflare React Native Maven mirror (`https://repo.reactnative.dev/maven2`) for instantaneous dependency resolution.
+- CMake compiled native C++ code for all major Android architectures (`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`).
+
+#### D. Standalone Release APK Generated:
+- Metro compiled 598 JavaScript modules into an offline bundle (`index.android.bundle`).
+- Dexing and resource packaging completed with 100% success.
+- Final standalone APK generated and copied to:
+  `c:\voice agenty\AI-Voice-Agent.apk` (~71.1 MB).
+- Created a convenient 1-click builder script: [`c:\voice agenty\build-apk.bat`](file:///c:/voice%20agenty/build-apk.bat).
+
+---
+
 ## 🚀 What We Are Ready to Build Next (Future Roadmap)
 1. **Stage 6.1 Direct Personal WhatsApp Integration via Baileys (Completed! ✅):**
    - Universal QR scan pairing (`http://localhost:3005/qr`), real-time call interception, and native Opus PTT voice notes.
@@ -1813,8 +1857,10 @@ VoiceAgentApp/
    - React Native Expo application (`VoiceAgentApp/`) with Voice Studio, Call History, Settings, and real-time telemetry.
 6. **Stage 8 Client-Side Neural VAD with Silero AI Voice Detection (Completed! ✅):**
    - Silero VAD v5 running in-browser via ONNX Runtime Web. Automatic speech detection, pipeline trigger, neural barge-in, and real-time confidence visualization.
-7. **Meta Cloud API WebRTC / SIP Calling Production Deployment:**
+7. **Stage 9 Standalone Android APK & Local Network Resolution (Completed! ✅):**
+   - Production Android `.apk` built locally with offline bundle, cleartext support, network presets, and 1-click build script.
+8. **Meta Cloud API WebRTC / SIP Calling Production Deployment:**
    - Link production WABA credentials and deploy WebRTC RTP audio bridge for real-time live WhatsApp VoIP phone calls.
-8. **Custom Character Personas & Prompt Presets:**
+9. **Custom Character Personas & Prompt Presets:**
    - Switchable agent personalities: Hotel Concierge, Tech Support Specialist, Medical Clinic Receptionist, and friendly assistant.
 
