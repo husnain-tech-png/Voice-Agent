@@ -1853,6 +1853,97 @@ When transitioning from a browser-based web studio to an Android APK app, two ma
   - Placed `💻 Localhost` as the primary preset chip in `PRESET_SERVERS` followed by `🤖 Android Emulator`, `🌐 Live Tunnel`, and `🏠 Wi-Fi (LAN)`.
   - Fixed a React Native style type condition in [`VoiceAgentApp/src/screens/VoiceStudioScreen.tsx`](file:///c:/voice%20agenty/VoiceAgentApp/src/screens/VoiceStudioScreen.tsx) and verified clean TypeScript compilation (`npx tsc --noEmit` exited 0).
 
+
+---
+
+## 📱 Stage 10: WhatsApp QR Resilience, In-App Device Linking & APK Implementation Blueprint (Completed! ✅)
+
+### 1. The Problem: "Why Was the WhatsApp QR Code Not Working on the Application?"
+When opening the application or attempting to connect WhatsApp to the AI Voice Agent, three compounding issues prevented device pairing:
+1. **The Infinite Disconnected 401 Loop:**
+   - When a WhatsApp session was previously linked and then unlinked or expired from the phone, WhatsApp Web servers emit a WebSocket disconnection with status `401` (`DisconnectReason.loggedOut`).
+   - In [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), the code previously checked `shouldReconnect = statusCode !== DisconnectReason.loggedOut`. Because `shouldReconnect` evaluated to `false`, the process did not reconnect and left the dead authentication files sitting inside `auth_baileys/`.
+   - On every subsequent restart, Baileys loaded the expired authentication keys from `auth_baileys/`, attempted to resume the dead session, received another immediate 401 error, and never emitted a fresh QR code!
+2. **The Inverted QR Code Visual Contrast Defect:**
+   - In [`whatsapp-personal.js`](file:///c:/voice%20agenty/whatsapp-personal.js), QR code generation was configured with inverted colors: `dark: "#e2e8f0"` (light slate) on `light: "#0f172a"` (dark navy background).
+   - WhatsApp's native mobile camera scanner in *Settings -> Linked Devices* requires standard high-contrast black modules on a pure white background with a clean quiet zone margin. When presented with light modules on dark backgrounds, standard smartphone camera lenses frequently fail to detect the position markers.
+3. **The Mobile App Port 3005 Isolation:**
+   - In [`VoiceAgentApp/src/api.ts`](file:///c:/voice%20agenty/VoiceAgentApp/src/api.ts), the app attempted to contact WhatsApp by blindly string-replacing the port: `SERVER_URL.replace(':3000', ':3005')`.
+   - When the user accesses the app through a public tunnel (e.g. Localtunnel `https://large-hotels-listen.loca.lt` or Ngrok), the tunnel only proxies port 3000. Port 3005 is not reachable through the tunnel, causing all mobile status and QR requests to silently timeout or fail.
+4. **The "Phone Cannot Scan Its Own Screen" Dilemma:**
+   - If the user runs the Android APK directly on their physical smartphone, they cannot use their phone's camera to scan a QR code displayed on the exact same phone screen!
+
+---
+
+### 2. How We Solved It Step-by-Step
+
+#### A. Self-Healing Authentication & Auto-Wipe (`whatsapp-personal.js`):
+- Created `clearAuthState()`: When Baileys signals `DisconnectReason.loggedOut` (401) or `DisconnectReason.multideviceMismatch` (411), the agent immediately wipes the dead credentials directory (`auth_baileys/`), recreates an empty clean folder, and automatically triggers a fresh socket initialization in 1.5 seconds.
+- Added `socketGeneration` tracking to ignore stale connection events from replaced sockets, preventing race conditions during reconnection.
+- Re-architected QR generation to standard high-contrast black-on-white (`#000000` on `#ffffff`) with error correction level `M` and clean white container framing.
+- Upgraded the browser descriptor to `Browsers.ubuntu("Chrome")` to conform with standard multi-device pairing specifications.
+
+#### B. Phone-Number Pairing Code Engine (`/pair`):
+- Added support for WhatsApp's official **Pairing Code API** (`sock.requestPairingCode(phone)`).
+- Users can now simply enter their mobile phone number (e.g., `923154483615`).
+- The backend returns an 8-character human-readable pairing code (e.g. `1234-5678`).
+- In WhatsApp on their phone, the user goes to **Settings -> Linked Devices -> Link a Device -> Link with phone number instead**, enters the code, and pairs instantly with zero cameras or scanning needed!
+
+#### C. Unified Gateway Reverse-Proxy (`server.js`):
+- Eliminated all client-side port 3005 dependencies.
+- Added three proxy endpoints to the main Express server on port 3000:
+  - `GET /api/whatsapp/qr`: Proxies live status and base64 QR Data URL from port 3005.
+  - `POST /api/whatsapp/pair`: Proxies phone-number pairing code requests.
+  - `POST /api/whatsapp/logout`: Proxies disconnect requests.
+- The mobile app now connects seamlessly through a single URL over local Wi-Fi, Localtunnel, Ngrok, or Android Emulator.
+
+#### D. Interactive Mobile WhatsApp Management (`SettingsScreen.tsx`):
+- **Live In-App QR Code:** Added an in-app QR container with automatic 4-second polling that displays the QR directly inside the app whenever WhatsApp is unpaired.
+- **Phone-Number Pairing Code Generator:** Added a dedicated phone number input and **"Get Code"** button for easy 1-device linking.
+- **Account Disconnect & Reset Button:** Added a secure red confirmation prompt enabling users to disconnect and switch WhatsApp numbers at any time directly from the app.
+
+#### E. Git Security & Credential Hygiene (`.gitignore`):
+- Added `auth_baileys/` and `whatsapp-status.json` to `.gitignore`.
+- Removed tracked runtime status files from Git index so private session encryption keys and runtime logs are never committed to public repositories.
+
+---
+
+### 3. Architecture & Gateway Flow Diagram
+
+```mermaid
+flowchart TD
+    subgraph Mobile Phone / VoiceAgentApp
+        A[SettingsScreen.tsx] -->|Single URL: Port 3000 / Tunnel| B(api.ts)
+        B -->|Option 1: In-App QR Display| C[Scans QR from 2nd Device]
+        B -->|Option 2: 1-Tap 'Get Code'| D[Enters 8-digit code in WhatsApp]
+    end
+
+    subgraph Express Gateway Server :3000
+        E[server.js] -->|Proxy /api/whatsapp/qr| F[Forward to 127.0.0.1:3005]
+        E -->|Proxy /api/whatsapp/pair| F
+        E -->|Proxy /api/whatsapp/logout| F
+    end
+
+    subgraph WhatsApp Baileys Agent :3005
+        F --> G[whatsapp-personal.js]
+        G -->|Status 401 Logged Out| H[clearAuthState: Auto-wipe auth_baileys]
+        H -->|Auto-Restart| I[Emit Fresh Black-on-White QR]
+        G -->|requestPairingCode| J[Meta WhatsApp Multi-Device Gateway]
+    end
+
+    B --> E
+```
+
+---
+
+### 4. Standalone APK Implementation Blueprint
+We created a complete engineering implementation plan in [`apk_build_plan.md`](file:///C:/Users/User/.gemini/antigravity-ide/brain/35f08e7c-ee2d-4f7c-8530-843b755d7ab4/apk_build_plan.md) covering:
+1. **Toolchain Verification:** Amazon Corretto OpenJDK 17 LTS, Android SDK Platform 35/36, NDK 28.2.
+2. **Real-Device Network Readiness:** Fixing in-memory URL loss with `@react-native-async-storage/async-storage` and runtime environment variables.
+3. **Release Keystore & Gradle Signing:** Generating persistent PKCS12 production keystores and Gradle config plugin injection.
+4. **Hardened Local Build Script:** Space-free drive mapping (`subst V:`), ABI filtering (`arm64-v8a` for 25MB lean APKs), and fail-fast validation.
+5. **Production Backend Exposure:** Cloudflare named tunnels / Ngrok static domains with shared `X-Agent-Key` API security headers.
+
 ---
 
 ## 🚀 What We Are Ready to Build Next (Future Roadmap)
@@ -1870,8 +1961,9 @@ When transitioning from a browser-based web studio to an Android APK app, two ma
    - Silero VAD v5 running in-browser via ONNX Runtime Web. Automatic speech detection, pipeline trigger, neural barge-in, and real-time confidence visualization.
 7. **Stage 9 Standalone Android APK & Local Network Resolution (Completed! ✅):**
    - Production Android `.apk` built locally with offline bundle, cleartext support, network presets, and 1-click build script.
-8. **Meta Cloud API WebRTC / SIP Calling Production Deployment:**
+8. **Stage 10 WhatsApp QR Code Resilience, In-App Pairing & Gateway Proxy (Completed! ✅):**
+   - Fixed 401 session dead-lock with auto-wipe self-healing, dark-on-light QR contrast, phone-number `/pair` codes, server reverse proxy, and in-app WhatsApp dashboard.
+9. **Meta Cloud API WebRTC / SIP Calling Production Deployment:**
    - Link production WABA credentials and deploy WebRTC RTP audio bridge for real-time live WhatsApp VoIP phone calls.
-9. **Custom Character Personas & Prompt Presets:**
-   - Switchable agent personalities: Hotel Concierge, Tech Support Specialist, Medical Clinic Receptionist, and friendly assistant.
-
+10. **Custom Character Personas & Prompt Presets:**
+    - Switchable agent personalities: Hotel Concierge, Tech Support Specialist, Medical Clinic Receptionist, and friendly assistant.

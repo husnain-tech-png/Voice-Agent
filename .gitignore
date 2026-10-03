@@ -4,3 +4,8 @@ node_modules/
 __pycache__/
 *.pyc
 *.apk
+
+# WhatsApp session credentials (private keys) — NEVER commit
+auth_baileys/
+# Runtime state written by the WhatsApp agent
+whatsapp-status.json

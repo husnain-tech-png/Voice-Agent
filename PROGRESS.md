@@ -393,6 +393,30 @@ Building an ultra-fast, conversational AI Voice Agent backend using Node.js, Exp
   - Reverted default backend connection in [`VoiceAgentApp/src/api.ts`](file:///c:/voice%20agenty/VoiceAgentApp/src/api.ts) to `http://localhost:3000` (`http://10.0.2.2:3000` for Android emulator) with Localhost prioritized as the primary chip.
   - Fixed React Native style condition in [`VoiceStudioScreen.tsx`](file:///c:/voice%20agenty/VoiceAgentApp/src/screens/VoiceStudioScreen.tsx) and verified clean TypeScript typecheck (`npx tsc --noEmit` exited 0).
 
+### Stage 10: WhatsApp QR Code Resilience, In-App Pairing & Gateway Proxy
+- [x] **Root Cause Diagnosis of WhatsApp QR Freeze**:
+  - Identified status 401 (`DisconnectReason.loggedOut`) defect: Baileys stopped reconnection when logged out, leaving dead session files in `auth_baileys/`. On every subsequent start, the server reloaded the dead session and never emitted a fresh QR code.
+  - Corrected QR code visual contrast: Inverted light-on-dark QR code (white modules on dark blue) was unreadable by standard smartphone cameras; switched to pure `#000000` on `#ffffff` with white quiet zone padding.
+  - Eliminated port 3005 isolation: Mobile app previously tried to contact port 3005 directly, which fails through cloud tunnels (localtunnel / ngrok) where only port 3000 is forwarded.
+- [x] **Self-Healing Auth Engine (`whatsapp-personal.js`)**:
+  - Added `clearAuthState()`: Detects `DisconnectReason.loggedOut` (401) or `DisconnectReason.multideviceMismatch` (411), automatically purges corrupted `auth_baileys/` tokens, and restarts cleanly to emit a fresh QR in ~1.5s.
+  - Implemented socket generation tracking (`socketGeneration`) and stale event guards to eliminate connection race conditions.
+  - Upgraded browser signature to `Browsers.ubuntu("Chrome")` for standardized multi-device pairing support.
+- [x] **Phone-Number Pairing Code Support (`/pair`)**:
+  - Implemented `requestPairingCode(phone)` allowing users to link WhatsApp directly via an 8-character numeric code (`1234-5678`) without scanning a QR code (essential when WhatsApp and VoiceAgentApp run on the same physical phone).
+  - Added JSON endpoints `/qr.json`, `/pair`, and `/logout`.
+- [x] **Server Reverse-Proxy Gateway (`server.js`)**:
+  - Added `/api/whatsapp/qr`, `/api/whatsapp/pair`, and `/api/whatsapp/logout` proxies directly in the main Express server on port 3000.
+  - Unified all mobile client traffic through a single base URL (compatible with Localtunnel, Ngrok, LAN, and Emulator).
+- [x] **Mobile App In-App WhatsApp Dashboard (`SettingsScreen.tsx` & `api.ts`)**:
+  - Embedded live scannable QR image directly within the mobile app's Settings screen with 4-second auto-refresh.
+  - Added 1-tap phone number input with **"Get Code"** action for phone-number based device linking.
+  - Added **"Disconnect & Pair New Number"** button to reset WhatsApp accounts on demand.
+- [x] **Repository Security & Credential Hygiene**:
+  - Added `auth_baileys/` and `whatsapp-status.json` to `.gitignore` to prevent private session keys and runtime state from ever leaking into Git.
+- [x] **APK Implementation Blueprint ([`apk_build_plan.md`](file:///C:/Users/User/.gemini/antigravity-ide/brain/35f08e7c-ee2d-4f7c-8530-843b755d7ab4/apk_build_plan.md))**:
+  - Comprehensive 6-phase engineering plan covering real-device URL persistence, release keystore generation, Gradle optimization, and distribution.
+
 ---
 
 ## 🏗️ Architecture & Data Flow
@@ -753,6 +777,8 @@ PERSONAL_PHONE_NUMBER=+923154483615
   - Toggle switch in controls panel to enable/disable hands-free mode.
 - [x] **Stage 9: Standalone Android APK Build, Toolchain Setup & Repository Hygiene**:
   - Production Android APK compilation with offline bundle, cleartext HTTP support, 1-click builder script (`build-apk.bat`), Git `*.apk` ignore, and default localhost connection.
+- [x] **Stage 10: WhatsApp QR Code Resilience, In-App Pairing & Gateway Proxy**:
+  - Auto-reset 401 dead session loop, dark-on-light QR contrast, phone-number `/pair` codes, server reverse proxy, and in-app WhatsApp dashboard.
 - [ ] **Custom Character Personas & Prompt Presets**:
   - Switchable personas: Hotel Concierge, Tech Support Specialist, Medical Receptionist, Catbot.
 
