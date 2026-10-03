@@ -2,7 +2,7 @@
  * Settings Screen — Server connection & app configuration
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,9 +14,20 @@ import {
   Alert,
   Linking,
   Platform,
+  Image,
 } from 'react-native';
 import { Colors, Spacing, Radius, FontSizes, FontWeights } from '../theme';
-import { fetchHealth, getServerUrl, setServerUrl, fetchWhatsAppStatus, HealthStatus, WhatsAppStatus, PRESET_SERVERS } from '../api';
+import {
+  fetchHealth,
+  getServerUrl,
+  setServerUrl,
+  fetchWhatsAppStatus,
+  requestWhatsAppPairingCode,
+  logoutWhatsApp,
+  HealthStatus,
+  WhatsAppStatus,
+  PRESET_SERVERS,
+} from '../api';
 
 export default function SettingsScreen() {
   const [serverUrl, setServerUrlState] = useState(getServerUrl());
@@ -24,19 +35,26 @@ export default function SettingsScreen() {
   const [waStatus, setWaStatus] = useState<WhatsAppStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [urlInput, setUrlInput] = useState(getServerUrl());
+  const [pairPhone, setPairPhone] = useState('');
+  const [pairCode, setPairCode] = useState<string | null>(null);
+  const [pairing, setPairing] = useState(false);
+
+  const refreshWhatsApp = useCallback(async () => {
+    try {
+      const wa = await fetchWhatsAppStatus();
+      setWaStatus(wa);
+      if (wa.connected) setPairCode(null);
+    } catch {
+      setWaStatus(null);
+    }
+  }, []);
 
   const checkConnection = async () => {
     setLoading(true);
     try {
       const h = await fetchHealth();
       setHealth(h);
-      
-      try {
-        const wa = await fetchWhatsAppStatus();
-        setWaStatus(wa);
-      } catch {
-        setWaStatus(null);
-      }
+      await refreshWhatsApp();
     } catch (err: any) {
       setHealth(null);
       Alert.alert('Connection Failed', `Could not connect to ${serverUrl}\n\n${err.message}`);
@@ -48,6 +66,50 @@ export default function SettingsScreen() {
   useEffect(() => {
     checkConnection();
   }, []);
+
+  // Poll while WhatsApp is not yet linked — QR codes rotate every ~20s
+  const waLinked = !!waStatus?.connected;
+  useEffect(() => {
+    if (!health || waLinked) return;
+    const id = setInterval(refreshWhatsApp, 4000);
+    return () => clearInterval(id);
+  }, [health, waLinked, refreshWhatsApp]);
+
+  const handleRequestPairingCode = async () => {
+    const digits = pairPhone.replace(/\D/g, '');
+    if (digits.length < 10) {
+      Alert.alert('Invalid number', 'Enter your full WhatsApp number with country code, e.g. 923001234567');
+      return;
+    }
+    setPairing(true);
+    try {
+      const code = await requestWhatsAppPairingCode(digits);
+      setPairCode(code);
+    } catch (err: any) {
+      Alert.alert('Pairing failed', err.message);
+    } finally {
+      setPairing(false);
+    }
+  };
+
+  const handleDisconnectWhatsApp = () => {
+    Alert.alert('Disconnect WhatsApp?', 'The agent will stop replying until you link a number again.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Disconnect',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await logoutWhatsApp();
+            setPairCode(null);
+            setTimeout(refreshWhatsApp, 2500);
+          } catch (err: any) {
+            Alert.alert('Disconnect failed', err.message);
+          }
+        },
+      },
+    ]);
+  };
 
   const handleSaveUrl = () => {
     const url = urlInput.trim().replace(/\/+$/, '');
@@ -197,19 +259,23 @@ export default function SettingsScreen() {
       {/* WhatsApp Status */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>📱 WhatsApp Agent</Text>
-        {waStatus ? (
+        {!waStatus || waStatus.status === 'not_running' ? (
+          <Text style={styles.notConnected}>
+            WhatsApp agent not reachable. Start it on the server with: npm run whatsapp
+          </Text>
+        ) : waStatus.connected ? (
           <>
             <ServiceRow
-              icon={waStatus.connected ? '🟢' : '🔴'}
+              icon="🟢"
               label="Connection"
-              value={waStatus.connected ? 'Connected & Online' : 'Disconnected'}
-              status={waStatus.connected ? 'active' : 'inactive'}
+              value="Connected & Online"
+              status="active"
             />
             {waStatus.user && (
               <ServiceRow
                 icon="👤"
                 label="Paired Account"
-                value={`${waStatus.user.name} (+${waStatus.user.id?.split(':')[0] || ''})`}
+                value={`${waStatus.user.name || 'WhatsApp'} (+${waStatus.user.id?.split(':')[0] || ''})`}
                 status="active"
               />
             )}
@@ -219,11 +285,67 @@ export default function SettingsScreen() {
               value={`${waStatus.activeConversations || 0} chats`}
               status="active"
             />
+            <TouchableOpacity style={styles.dangerBtn} onPress={handleDisconnectWhatsApp}>
+              <Text style={styles.dangerBtnText}>Disconnect & Pair New Number</Text>
+            </TouchableOpacity>
           </>
         ) : (
-          <Text style={styles.notConnected}>
-            WhatsApp agent not reachable. Make sure it's running on port 3005.
-          </Text>
+          <>
+            <ServiceRow
+              icon="🟡"
+              label="Connection"
+              value={waStatus.qrDataUrl ? 'Waiting for you to link a device' : 'Preparing a fresh QR code…'}
+              status="warning"
+            />
+
+            {/* Option 1: Scan QR (from another phone, or this app on a tablet/PC) */}
+            <Text style={styles.waSectionLabel}>Option 1 — Scan QR from another device</Text>
+            <View style={styles.qrBox}>
+              {waStatus.qrDataUrl ? (
+                <Image source={{ uri: waStatus.qrDataUrl }} style={styles.qrImage} resizeMode="contain" />
+              ) : (
+                <ActivityIndicator size="large" color={Colors.black} />
+              )}
+            </View>
+            <Text style={styles.waHint}>
+              WhatsApp → Settings → Linked Devices → Link a Device. The code refreshes automatically.
+            </Text>
+
+            {/* Option 2: Pairing code (when WhatsApp is on THIS phone) */}
+            <Text style={styles.waSectionLabel}>Option 2 — WhatsApp is on this phone</Text>
+            <View style={styles.urlInputRow}>
+              <TextInput
+                style={styles.urlInput}
+                value={pairPhone}
+                onChangeText={setPairPhone}
+                placeholder="923001234567"
+                placeholderTextColor={Colors.textDark}
+                keyboardType="phone-pad"
+                maxLength={16}
+              />
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleRequestPairingCode}
+                disabled={pairing}
+              >
+                {pairing ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Text style={styles.saveBtnText}>Get Code</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+            {(pairCode || waStatus.pairingCode) && (
+              <View style={styles.pairCodeBox}>
+                <Text style={styles.pairCodeText} selectable>
+                  {pairCode || waStatus.pairingCode}
+                </Text>
+              </View>
+            )}
+            <Text style={styles.waHint}>
+              WhatsApp → Linked Devices → Link a Device → “Link with phone number instead”, then enter the code.
+            </Text>
+          </>
         )}
       </View>
 
@@ -426,6 +548,64 @@ const styles = StyleSheet.create({
     color: Colors.textDark,
     fontSize: FontSizes.sm,
     fontStyle: 'italic',
+  },
+
+  // WhatsApp linking
+  waSectionLabel: {
+    color: Colors.textMuted,
+    fontSize: FontSizes.xs,
+    fontWeight: FontWeights.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginTop: Spacing.sm,
+  },
+  qrBox: {
+    alignSelf: 'center',
+    width: 252,
+    height: 252,
+    backgroundColor: Colors.white, // QR must be dark-on-light to scan reliably
+    borderRadius: Radius.lg,
+    padding: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrImage: {
+    width: 236,
+    height: 236,
+  },
+  waHint: {
+    color: Colors.textDark,
+    fontSize: FontSizes.xs,
+    lineHeight: 16,
+  },
+  pairCodeBox: {
+    backgroundColor: Colors.successGlow,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.lg,
+    alignItems: 'center',
+  },
+  pairCodeText: {
+    color: Colors.successText,
+    fontSize: FontSizes.xxl,
+    fontWeight: FontWeights.bold,
+    letterSpacing: 4,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  dangerBtn: {
+    backgroundColor: Colors.dangerGlow,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderRadius: Radius.sm,
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+    marginTop: Spacing.xs,
+  },
+  dangerBtnText: {
+    color: Colors.dangerText,
+    fontWeight: FontWeights.semibold,
+    fontSize: FontSizes.sm,
   },
 
   // Links

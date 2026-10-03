@@ -2228,6 +2228,34 @@ app.get("/api/whatsapp/status", (req, res) => {
   });
 });
 
+// WhatsApp proxy — lets the mobile app reach the WhatsApp agent (port 3005)
+// through this server's single public URL (tunnel / LAN / emulator).
+const WHATSAPP_AGENT_URL = `http://127.0.0.1:${process.env.WHATSAPP_PORT || 3005}`;
+
+async function proxyToWhatsApp(req, res, agentPath, method = "GET") {
+  try {
+    const upstream = await fetch(`${WHATSAPP_AGENT_URL}${agentPath}`, {
+      method,
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: method === "POST" ? JSON.stringify(req.body || {}) : undefined,
+      signal: AbortSignal.timeout(20000)
+    });
+    const data = await upstream.json().catch(() => ({}));
+    res.status(upstream.status).json(data);
+  } catch (err) {
+    res.status(503).json({
+      ok: false,
+      status: "not_running",
+      connected: false,
+      error: "WhatsApp agent is not reachable. Start it with: npm run whatsapp"
+    });
+  }
+}
+
+app.get("/api/whatsapp/qr", (req, res) => proxyToWhatsApp(req, res, "/qr.json"));
+app.post("/api/whatsapp/pair", (req, res) => proxyToWhatsApp(req, res, "/pair", "POST"));
+app.post("/api/whatsapp/logout", (req, res) => proxyToWhatsApp(req, res, "/logout", "POST"));
+
 // ==============================================
 // 11. Telnyx Telephony Status & Auto-Sync Endpoints
 // ==============================================

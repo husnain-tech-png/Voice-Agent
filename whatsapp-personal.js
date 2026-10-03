@@ -22,7 +22,8 @@ import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
-  downloadMediaMessage
+  downloadMediaMessage,
+  Browsers
 } from "@whiskeysockets/baileys";
 import pino from "pino";
 import qrcodeTerminal from "qrcode-terminal";
@@ -67,6 +68,8 @@ let connectionState = "disconnected"; // "connecting" | "qr_ready" | "connected"
 let botUser = null;                   // The paired WhatsApp user info
 let reconnectAttempt = 0;             // Exponential backoff counter
 const MAX_RECONNECT_DELAY = 60000;    // Max 60s between reconnects
+let socketGeneration = 0;             // Incremented per socket; stale events are ignored
+let currentPairingCode = null;        // Last pairing code issued (phone-number linking)
 
 const conversationHistory = new Map(); // remoteJid -> array of { role, content }
 const lastCallInterceptTime = new Map(); // remoteJid -> timestamp (rate limit)
@@ -492,7 +495,24 @@ async function safeSendText(jid, text, quotedMsg = null) {
 
 // ─── Baileys Socket Initialization ───────────────────────────────────────────
 
+/**
+ * Wipe the saved session so the next socket starts unpaired and emits a fresh QR.
+ * Needed after a 401 (logged out) — otherwise Baileys keeps reusing dead creds
+ * and never generates a new QR code.
+ */
+function clearAuthState() {
+  try {
+    fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+    fs.mkdirSync(AUTH_DIR, { recursive: true });
+    console.log("[AUTH] Cleared saved WhatsApp session.");
+  } catch (err) {
+    console.error("[AUTH] Failed to clear session:", err.message);
+  }
+}
+
 async function startWhatsAppBot() {
+  const myGeneration = ++socketGeneration;
+  currentPairingCode = null;
   updateStatus("connecting");
 
   console.log(`\n${"=".repeat(60)}`);
@@ -529,12 +549,16 @@ async function startWhatsAppBot() {
 
   console.log(`[BAILEYS] WhatsApp Web version: ${version.join(".")}`);
 
+  // Close any previous socket so it can't emit late events
+  try { sock?.end?.(undefined); } catch (_) {}
+
   sock = makeWASocket({
     version,
     auth: state,
     logger: pino({ level: "silent" }),
     printQRInTerminal: false,
-    browser: ["VoiceAgent-AI", "Chrome", "1.0.0"],
+    // Use a standard browser identity — custom names can break pairing-code linking
+    browser: Browsers.ubuntu("Chrome"),
     syncFullHistory: false,
     connectTimeoutMs: 30_000,
     defaultQueryTimeoutMs: 60_000
@@ -544,18 +568,23 @@ async function startWhatsAppBot() {
 
   // ── Connection Updates & QR ─────────────────────────────────────────────
   sock.ev.on("connection.update", async (update) => {
+    // Ignore events from a socket that has since been replaced
+    if (myGeneration !== socketGeneration) return;
+
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
       currentQrCode = qr;
       reconnectAttempt = 0; // Reset backoff on new QR
 
-      // Generate data URL for the web UI
+      // Generate data URL for the web UI.
+      // Must be dark-on-light: WhatsApp's scanner often fails on inverted QR codes.
       try {
         currentQrDataUrl = await QRCode.toDataURL(qr, {
           width: 320,
           margin: 2,
-          color: { dark: "#e2e8f0", light: "#0f172a" }
+          errorCorrectionLevel: "M",
+          color: { dark: "#000000", light: "#ffffff" }
         });
       } catch (qrErr) {
         console.warn("[QR] Could not generate QR data URL:", qrErr.message);
@@ -591,21 +620,33 @@ async function startWhatsAppBot() {
 
     if (connection === "close") {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-      updateStatus("disconnected", { statusCode, shouldReconnect });
+      // 401 = logged out (unlinked from phone), 411 = multi-device mismatch.
+      // Both mean the saved session is dead and must be wiped to get a new QR.
+      const sessionDead =
+        statusCode === DisconnectReason.loggedOut ||
+        statusCode === DisconnectReason.multideviceMismatch;
 
-      if (shouldReconnect) {
-        // Exponential backoff: 3s, 6s, 12s, 24s, ... up to 60s
-        reconnectAttempt++;
-        const delay = Math.min(3000 * Math.pow(2, reconnectAttempt - 1), MAX_RECONNECT_DELAY);
-        console.log(`[RECONNECT] Connection closed (code: ${statusCode}). Retrying in ${delay / 1000}s...`);
-        setTimeout(startWhatsAppBot, delay);
-      } else {
-        console.log("[DISCONNECTED] Logged out from WhatsApp.");
-        console.log("[DISCONNECTED] Delete the 'auth_baileys' folder and restart to pair a new number.");
-        currentQrCode = null;
-        currentQrDataUrl = null;
+      currentQrCode = null;
+      currentQrDataUrl = null;
+      currentPairingCode = null;
+
+      if (sessionDead) {
+        console.log(`[DISCONNECTED] Session invalid (code: ${statusCode}). Clearing auth and generating a fresh QR...`);
         botUser = null;
+        updateStatus("disconnected", { statusCode, shouldReconnect: true, reason: "session_reset" });
+        clearAuthState();
+        reconnectAttempt = 0;
+        setTimeout(() => startWhatsAppBot().catch(console.error), 1500);
+      } else {
+        updateStatus("disconnected", { statusCode, shouldReconnect: true });
+        // Exponential backoff: 3s, 6s, 12s, 24s, ... up to 60s
+        // 515 (restart required) happens right after a successful scan — reconnect immediately.
+        reconnectAttempt++;
+        const delay = statusCode === DisconnectReason.restartRequired
+          ? 500
+          : Math.min(3000 * Math.pow(2, reconnectAttempt - 1), MAX_RECONNECT_DELAY);
+        console.log(`[RECONNECT] Connection closed (code: ${statusCode}). Retrying in ${delay / 1000}s...`);
+        setTimeout(() => startWhatsAppBot().catch(console.error), delay);
       }
     }
   });
@@ -663,48 +704,119 @@ async function startWhatsAppBot() {
 
 // ─── Web Server (QR + Status) ────────────────────────────────────────────────
 
-const httpServer = http.createServer((req, res) => {
+function sendJson(res, code, payload) {
+  res.writeHead(code, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Origin": "*",
+    "Cache-Control": "no-cache, no-store"
+  });
+  res.end(JSON.stringify(payload));
+}
+
+function readJsonBody(req) {
+  return new Promise((resolve) => {
+    let raw = "";
+    req.on("data", (chunk) => { raw += chunk; if (raw.length > 10_000) req.destroy(); });
+    req.on("end", () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch { resolve({}); } });
+    req.on("error", () => resolve({}));
+  });
+}
+
+const httpServer = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
+
+  // ── CORS preflight ────────────────────────────────────────────────────
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type"
+    });
+    return res.end();
+  }
 
   // ── JSON Status Endpoint ──────────────────────────────────────────────
   if (url.pathname === "/status") {
-    res.writeHead(200, {
-      "Content-Type": "application/json; charset=utf-8",
-      "Access-Control-Allow-Origin": "*"
-    });
-    return res.end(JSON.stringify({
+    return sendJson(res, 200, {
       status: connectionState,
       connected: connectionState === "connected",
       user: botUser ? { id: botUser.id, name: botUser.name } : null,
       activeConversations: conversationHistory.size
-    }));
+    });
+  }
+
+  // ── JSON Status + QR (for the mobile app) ─────────────────────────────
+  if (url.pathname === "/qr.json") {
+    return sendJson(res, 200, {
+      status: connectionState,
+      connected: connectionState === "connected",
+      user: botUser ? { id: botUser.id, name: botUser.name } : null,
+      activeConversations: conversationHistory.size,
+      qrDataUrl: connectionState === "connected" ? null : currentQrDataUrl,
+      pairingCode: currentPairingCode
+    });
+  }
+
+  // ── Pairing Code (link via phone number — no QR scan needed) ──────────
+  // WhatsApp → Linked Devices → Link a Device → "Link with phone number instead"
+  if (url.pathname === "/pair") {
+    const body = req.method === "POST" ? await readJsonBody(req) : {};
+    const phone = String(body.phone || url.searchParams.get("phone") || "").replace(/\D/g, "");
+
+    if (connectionState === "connected") {
+      return sendJson(res, 409, { ok: false, error: "Already connected. Disconnect first to pair a different number." });
+    }
+    if (phone.length < 10 || phone.length > 15) {
+      return sendJson(res, 400, { ok: false, error: "Enter the full number with country code, e.g. 923001234567" });
+    }
+    if (!sock || sock.authState?.creds?.registered) {
+      return sendJson(res, 503, { ok: false, error: "WhatsApp socket not ready yet. Try again in a few seconds." });
+    }
+
+    try {
+      const code = await sock.requestPairingCode(phone);
+      currentPairingCode = code?.match(/.{1,4}/g)?.join("-") || code;
+      console.log(`[PAIR] Pairing code for +${phone}: ${currentPairingCode}`);
+      return sendJson(res, 200, { ok: true, code: currentPairingCode });
+    } catch (err) {
+      console.error("[PAIR ERROR]", err.message);
+      return sendJson(res, 500, { ok: false, error: err.message });
+    }
   }
 
   // ── Logout / Reset Endpoint ───────────────────────────────────────────
   if (url.pathname === "/logout") {
     try {
-      sock?.logout?.().catch(() => {});
-      fs.rmSync(AUTH_DIR, { recursive: true, force: true });
-      fs.mkdirSync(AUTH_DIR, { recursive: true });
+      // Invalidate the current socket first so its close event (401) is ignored
+      socketGeneration++;
+      const oldSock = sock;
+      sock = null;
+      await oldSock?.logout?.().catch(() => {});
+      try { oldSock?.end?.(undefined); } catch (_) {}
+
+      clearAuthState();
       botUser = null;
       currentQrCode = null;
       currentQrDataUrl = null;
-      connectionState = "disconnected";
+      currentPairingCode = null;
+      reconnectAttempt = 0;
       updateStatus("disconnected", { reason: "manual_logout" });
-
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, message: "Logged out. Restart the agent to pair a new number." }));
 
       // Restart to get a fresh QR
       setTimeout(() => {
         console.log("[LOGOUT] Restarting for fresh QR...");
         startWhatsAppBot().catch(console.error);
-      }, 2000);
+      }, 1500);
+
+      const wantsHtml = (req.headers.accept || "").includes("text/html");
+      if (wantsHtml) {
+        res.writeHead(302, { Location: "/qr" });
+        return res.end();
+      }
+      return sendJson(res, 200, { ok: true, message: "Logged out. A fresh QR code will be ready in a few seconds." });
     } catch (err) {
-      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: false, error: err.message }));
+      return sendJson(res, 500, { ok: false, error: err.message });
     }
-    return;
   }
 
   // ── QR Page / Landing Page ────────────────────────────────────────────
@@ -790,9 +902,9 @@ const httpServer = http.createServer((req, res) => {
       50% { opacity: 0.3; }
     }
     .qr-container {
-      background: #0f172a;
+      background: #ffffff;
       border-radius: 14px;
-      padding: 20px;
+      padding: 12px;
       margin: 16px auto;
       display: inline-block;
     }
